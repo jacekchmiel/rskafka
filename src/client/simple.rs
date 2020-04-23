@@ -3,7 +3,7 @@ use crate::proto;
 use log::trace;
 use proto::{
     apis::api_versions::{ApiVersionsRange, ApiVersionsV0Request, ApiVersionsV0Response},
-    data::write_request,
+    data::{header::ResponseHeader, write_request},
     KafkaWireFormatParse,
 };
 use std::io::Read;
@@ -34,17 +34,16 @@ impl SimpleClient {
             Some(&self.config.client_id),
         )?;
 
-        let response: ApiVersionsV0Response = self.wait_for_response(correlation_id)?;
+        let response_bytes = self.wait_for_response(correlation_id)?;
+        let response = ApiVersionsV0Response::from_wire_bytes(response_bytes.data())?;
+
         match response.error {
             Some(error_code) => Err(Error::ErrorResponse(error_code)),
             None => Ok(response.api_keys),
         }
     }
 
-    fn wait_for_response<R: KafkaWireFormatParse>(
-        &mut self,
-        correlation_id: i32,
-    ) -> Result<R, Error> {
+    fn wait_for_response(&mut self, correlation_id: i32) -> Result<ResponseBuffer, Error> {
         trace!("wait_for_response: correlation_id={}", correlation_id);
         let timer = Timer::new(self.config.request_timeout);
 
@@ -69,15 +68,33 @@ impl SimpleClient {
         }
 
         trace!("wait_for_response: received_bytes={:?}", data_buffer);
-        let (response_bytes, header) = proto::parse_header(&data_buffer)?;
+        let header = ResponseHeader::from_wire_bytes_buffer(&data_buffer)?;
         if header.correlation_id == correlation_id {
-            return Ok(R::from_wire_bytes(&response_bytes)?);
+            Ok(ResponseBuffer(data_buffer))
+        // return Ok(R::from_wire_bytes(&response_bytes)?);
         } else {
             return Err(Error::ProtocolError(format!(
                 "unexpected correlation_id={}, expected correlation_id={}",
                 header.correlation_id, correlation_id
             )));
         }
+    }
+}
+
+pub struct ResponseBuffer(Vec<u8>);
+
+impl ResponseBuffer {
+    const HEADER_SIZE: usize = 4;
+
+    pub fn correlation_id(&self) -> i32 {
+        //this struct is created only after successfully parsing header in the first place so unwrap here is okay-ish
+        let header = ResponseHeader::from_wire_bytes(&self.0).unwrap();
+
+        header.correlation_id
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.0[Self::HEADER_SIZE..]
     }
 }
 

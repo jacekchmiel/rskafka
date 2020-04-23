@@ -7,6 +7,7 @@ use super::{KafkaRequest, KafkaWireFormatWrite};
 use byteorder::{BigEndian, WriteBytesExt};
 use header::RequestHeader;
 use log::{log_enabled, trace};
+use std::borrow::Cow;
 
 pub(crate) fn write_request<W: std::io::Write, R: KafkaRequest>(
     mut writer: W,
@@ -18,7 +19,7 @@ pub(crate) fn write_request<W: std::io::Write, R: KafkaRequest>(
         request_api_key: R::API_KEY,
         request_api_version: R::API_VERSION,
         correlation_id,
-        client_id,
+        client_id: client_id.map(Cow::Borrowed),
     };
     let size = header.serialized_size() + request.serialized_size();
 
@@ -44,13 +45,14 @@ pub(crate) fn write_request<W: std::io::Write, R: KafkaRequest>(
     Ok(0)
 }
 
+#[cfg(test)]
 pub(crate) fn request_bytes<R: KafkaRequest>(
     request: &R,
     correlation_id: i32,
     client_id: Option<&str>,
 ) -> Vec<u8> {
     let mut buffer = Vec::new();
-    write_request(&mut buffer, request, correlation_id, client_id).expect("write to buffer failed");
+    write_request(&mut buffer, request, correlation_id, client_id).expect("write to vec failed");
 
     buffer
 }

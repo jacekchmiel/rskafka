@@ -1,14 +1,17 @@
 use super::api_key::ApiKey;
-use crate::proto::{data::primitive::NullableString, KafkaWireFormatParse, KafkaWireFormatWrite};
+use crate::proto::{
+    data::primitive::NullableString, KafkaWireFormatParse, KafkaWireFormatWrite, ParseError,
+};
 use byteorder::{BigEndian, WriteBytesExt};
+use std::borrow::Cow;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct RequestHeader<'a> {
     pub request_api_key: ApiKey,
     pub request_api_version: i16,
     pub correlation_id: i32,
 
-    pub client_id: Option<&'a str>,
+    pub client_id: Option<Cow<'a, str>>,
 }
 
 impl<'a> KafkaWireFormatWrite for RequestHeader<'a> {
@@ -16,14 +19,14 @@ impl<'a> KafkaWireFormatWrite for RequestHeader<'a> {
         self.request_api_key.serialized_size()
             + std::mem::size_of_val(&self.request_api_version)
             + std::mem::size_of_val(&self.correlation_id)
-            + NullableString(self.client_id).serialized_size()
+            + NullableString(self.client_id.clone()).serialized_size()
     }
 
     fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<usize> {
         writer.write_i16::<BigEndian>(self.request_api_key.to_i16())?;
         writer.write_i16::<BigEndian>(self.request_api_version)?;
         writer.write_i32::<BigEndian>(self.correlation_id)?;
-        NullableString(self.client_id).write_into(writer)?;
+        NullableString(self.client_id.clone()).write_into(writer)?;
 
         Ok(self.serialized_size())
     }
@@ -34,8 +37,8 @@ pub(crate) struct ResponseHeader {
     pub correlation_id: i32,
 }
 
-impl KafkaWireFormatParse for ResponseHeader {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self> {
+impl<'a> KafkaWireFormatParse<'a> for ResponseHeader {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         use nom::combinator::map;
         use nom::number::complete::be_i32;
 
@@ -53,7 +56,7 @@ mod test {
             request_api_key: ApiKey::ApiVersions,
             request_api_version: 0,
             correlation_id: 1,
-            client_id: Some("rskafka"),
+            client_id: Some(Cow::Borrowed("rskafka")),
         };
 
         assert_eq!(header.serialized_size(), 17);

@@ -1,4 +1,4 @@
-use crate::proto::KafkaWireFormatParse;
+use crate::proto::{KafkaWireFormatParse, ParseError};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct ErrorCode(i16);
@@ -17,8 +17,8 @@ impl ErrorCode {
     }
 }
 
-impl KafkaWireFormatParse for Option<ErrorCode> {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self> {
+impl<'a> KafkaWireFormatParse<'a> for Option<ErrorCode> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         use nom::combinator::map;
         use nom::number::complete::le_i16;
 

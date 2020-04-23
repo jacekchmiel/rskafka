@@ -1,7 +1,6 @@
 use crate::proto::{
     data::{api_key::ApiKey, error::ErrorCode},
-    decode::primitive::array,
-    KafkaRequest, KafkaWireFormatParse, KafkaWireFormatWrite,
+    KafkaRequest, KafkaWireFormatParse, KafkaWireFormatWrite, ParseError,
 };
 use either::Either;
 use nom::combinator::map;
@@ -16,7 +15,7 @@ impl KafkaWireFormatWrite for ApiVersionsV0Request {
         0
     }
 
-    fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<usize> {
+    fn write_into<W: std::io::Write>(&self, _writer: &mut W) -> std::io::Result<usize> {
         Ok(0)
     }
 }
@@ -26,12 +25,6 @@ impl KafkaRequest for ApiVersionsV0Request {
     const API_VERSION: i16 = 0;
 }
 
-// ApiVersions Response (Version: 0) => error_code [api_keys]
-//   error_code => INT16
-//   api_keys => api_key min_version max_version
-//     api_key => INT16
-//     min_version => INT16
-//     max_version => INT16
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ApiVersionsV0Response {
     pub error: Option<ErrorCode>,
@@ -44,15 +37,15 @@ impl ApiVersionsV0Response {
     }
 }
 
-fn api_versions_filtered(input: &[u8]) -> nom::IResult<&[u8], Vec<ApiVersionsRange>> {
+fn api_versions_filtered(input: &[u8]) -> nom::IResult<&[u8], Vec<ApiVersionsRange>, ParseError> {
     map(
-        array::<Either<ApiVersionsRange, UnknownApiKey>>,
+        Vec::<Either<ApiVersionsRange, UnknownApiKey>>::parse_bytes,
         |versions| versions.into_iter().filter_map(Either::left).collect(),
     )(input)
 }
 
-impl KafkaWireFormatParse for ApiVersionsV0Response {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self> {
+impl<'a> KafkaWireFormatParse<'a> for ApiVersionsV0Response {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         map(
             tuple((Option::<ErrorCode>::parse_bytes, api_versions_filtered)),
             ApiVersionsV0Response::from_tuple,
@@ -79,8 +72,8 @@ impl ApiVersionsRange {
 
 pub struct UnknownApiKey(pub i16);
 
-impl KafkaWireFormatParse for Either<ApiVersionsRange, UnknownApiKey> {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self> {
+impl<'a> KafkaWireFormatParse<'a> for Either<ApiVersionsRange, UnknownApiKey> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         map(
             tuple((be_i16, be_i16, be_i16)),
             |(api_key_code, min_version, max_version)| match ApiKey::try_from_i16(api_key_code).ok()

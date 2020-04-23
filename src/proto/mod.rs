@@ -1,44 +1,16 @@
 pub(crate) mod apis;
 pub(crate) mod data;
-pub(crate) mod decode;
 
-use data::{api_key::ApiKey, header::ResponseHeader};
-use nom::IResult;
+use data::api_key::ApiKey;
+use nom::{error::ParseError as ParseErrorTrait, IResult};
 use thiserror::Error;
 
-#[derive(Debug, Error, PartialEq, Eq)]
-#[error("parse error")]
-pub enum ParseError {
-    #[error("too many bytes")]
-    TooMuchData(usize),
-    #[error("not enough bytes")]
-    Incomplete(nom::Needed),
-    #[error("{0:?}")]
-    Parse(nom::error::ErrorKind),
-}
-
-impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for ParseError {
-    fn from(v: nom::Err<(&[u8], nom::error::ErrorKind)>) -> Self {
-        match v {
-            nom::Err::Incomplete(needed) => ParseError::Incomplete(needed),
-            nom::Err::Error((_, e)) | nom::Err::Failure((_, e)) => ParseError::Parse(e),
-        }
-    }
-}
-
-// pub(crate) fn parse_response(input: &[u8]) -> Result<Response, ParseError> {
-//     match decode::response(input) {
-//         Ok((&[], rsp)) => Ok(rsp),
-//         Ok((rem, _)) => Err(ParseError::TooMuchData(rem.len())),
-//         Err(nom::Err::Incomplete(needed)) => Err(ParseError::Incomplete(needed)),
-//         Err(nom::Err::Error((_, e))) | Err(nom::Err::Failure((_, e))) => Err(ParseError::Parse(e)),
-//     }
-// }
-
+/// Object that can be written in Kafka Protocol wire format
 pub(crate) trait KafkaWireFormatWrite {
     fn serialized_size(&self) -> usize;
     fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<usize>;
 
+    /// Writes data to new byte vector
     #[cfg(test)]
     fn to_wire_bytes(&self) -> Vec<u8> {
         let mut buffer = Vec::with_capacity(self.serialized_size());
@@ -49,30 +21,78 @@ pub(crate) trait KafkaWireFormatWrite {
     }
 }
 
+/// Represents a concrete request in Kafka Protocol wire format.
+/// Has specific Api Key, Api Version and can be written in wire format.
 pub(crate) trait KafkaRequest: KafkaWireFormatWrite {
     const API_KEY: ApiKey;
     const API_VERSION: i16;
 }
 
-pub(crate) trait KafkaWireFormatParse: Sized {
-    fn parse_bytes(input: &[u8]) -> IResult<&[u8], Self>;
+/// Object that can be parsed from Kafka Protocol wire data
+pub(crate) trait KafkaWireFormatParse<'a>: Sized {
+    /// Parses bytes to create Self, borrowing data from buffer (lifetime of created object
+    /// is bound to buffer lifetime). Follows nom protocol for easy parser combinations.
+    fn parse_bytes(input: &'a [u8]) -> IResult<&'a [u8], Self, ParseError>;
 
-    fn from_wire_bytes(input: &[u8]) -> Result<Self, ParseError> {
+    /// Creates object from exact number of bytes (can return ParseError::TooMuchData)
+    fn from_wire_bytes(input: &'a [u8]) -> Result<Self, ParseError> {
         match Self::parse_bytes(input) {
             Ok((&[], parsed)) => Ok(parsed),
             Ok((rem, _)) => Err(ParseError::TooMuchData(rem.len())),
             Err(nom::Err::Incomplete(needed)) => Err(ParseError::Incomplete(needed)),
-            Err(nom::Err::Error((_, e))) | Err(nom::Err::Failure((_, e))) => {
-                Err(ParseError::Parse(e))
+            Err(nom::Err::Error(error)) | Err(nom::Err::Failure(error)) => Err(error),
+        }
+    }
+
+    /// Creates object from bytes. Does not return ParseError::TooMuchData if buffer contains more data.
+    fn from_wire_bytes_buffer(input: &'a [u8]) -> Result<Self, ParseError> {
+        match Self::parse_bytes(input) {
+            Ok((_, parsed)) => Ok(parsed),
+            Err(nom::Err::Incomplete(needed)) => Err(ParseError::Incomplete(needed)),
+            Err(nom::Err::Error(error)) | Err(nom::Err::Failure(error)) => Err(error),
+        }
+    }
+}
+
+#[derive(Debug, Error, PartialEq, Eq)]
+#[error("parse error")]
+pub enum ParseError {
+    #[error("too many bytes")]
+    TooMuchData(usize),
+    #[error("not enough bytes")]
+    Incomplete(nom::Needed),
+    #[error("{0:?}")]
+    Parse(Vec<nom::error::ErrorKind>),
+    #[error("{0:?}")]
+    Custom(&'static str),
+}
+
+impl<I> nom::error::ParseError<I> for ParseError {
+    fn from_error_kind(_input: I, kind: nom::error::ErrorKind) -> Self {
+        ParseError::Parse(vec![kind])
+    }
+
+    fn append(_input: I, kind: nom::error::ErrorKind, other: Self) -> Self {
+        match other {
+            ParseError::Parse(trace) => {
+                ParseError::Parse(trace.into_iter().chain(std::iter::once(kind)).collect())
+            }
+            other => other,
+        }
+    }
+}
+
+impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for ParseError {
+    fn from(v: nom::Err<(&[u8], nom::error::ErrorKind)>) -> Self {
+        match v {
+            nom::Err::Incomplete(needed) => ParseError::Incomplete(needed),
+            nom::Err::Error((i, e)) | nom::Err::Failure((i, e)) => {
+                ParseError::from_error_kind(i, e)
             }
         }
     }
 }
 
-pub(crate) fn parse_header(input: &[u8]) -> Result<(&[u8], ResponseHeader), ParseError> {
-    match ResponseHeader::parse_bytes(input) {
-        Ok((response_bytes, header)) => Ok((response_bytes, header)),
-        Err(nom::Err::Incomplete(needed)) => Err(ParseError::Incomplete(needed)),
-        Err(nom::Err::Error((_, e))) | Err(nom::Err::Failure((_, e))) => Err(ParseError::Parse(e)),
-    }
+fn custom_error(s: &'static str) -> nom::Err<ParseError> {
+    nom::Err::Error(ParseError::Custom(s))
 }

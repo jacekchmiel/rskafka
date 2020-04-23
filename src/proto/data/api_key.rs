@@ -1,4 +1,4 @@
-use crate::proto::KafkaWireFormatParse;
+use crate::proto::{KafkaWireFormatParse, ParseError};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -38,8 +38,8 @@ impl Into<i16> for ApiKey {
     }
 }
 
-impl KafkaWireFormatParse for ApiKey {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self> {
+impl<'a> KafkaWireFormatParse<'a> for ApiKey {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         use nom::combinator::map_res;
         use nom::number::complete::be_i16;
 
