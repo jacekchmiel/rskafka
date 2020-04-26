@@ -39,7 +39,7 @@ impl SimpleClient {
     pub fn get_api_versions(&mut self) -> Result<Vec<ApiVersionsRange>, Error> {
         debug!("get_api_versions");
         let response: ApiVersionsV0Response = self.exchange(&ApiVersionsV0Request)?;
-        match response.error {
+        match response.error_code.get_err() {
             Some(error_code) => Err(Error::ErrorResponse(error_code)),
             None => Ok(response.api_keys),
         }

@@ -26,7 +26,7 @@ pub struct BrokerMetadata {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TopicMetadata {
-    error: Option<ErrorCode>,
+    error: ErrorCode,
     name: String,
     is_internal: bool,
     partitions: Vec<PartitionMetadata>,
@@ -34,7 +34,7 @@ pub struct TopicMetadata {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PartitionMetadata {
-    error: Option<ErrorCode>,
+    error: ErrorCode,
     partition_index: i32,
     leader: i32,
     replicas: Vec<i32>,
@@ -95,7 +95,7 @@ impl<'a> KafkaWireFormatParse for BrokerMetadata {
 
 impl<'a> KafkaWireFormatParse for TopicMetadata {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
-        let (input, error) = Option::<ErrorCode>::parse_bytes(input)?;
+        let (input, error) = ErrorCode::parse_bytes(input)?;
         let (input, name) = String::parse_bytes(input)?;
         let (input, is_internal) = bool::parse_bytes(input)?;
         let (input, partitions) = Vec::<PartitionMetadata>::parse_bytes(input)?;
@@ -113,7 +113,7 @@ impl<'a> KafkaWireFormatParse for TopicMetadata {
 
 impl<'a> KafkaWireFormatParse for PartitionMetadata {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
-        let (input, error) = Option::<ErrorCode>::parse_bytes(input)?;
+        let (input, error) = ErrorCode::parse_bytes(input)?;
         let (input, partition_index) = i32::parse_bytes(input)?;
         let (input, leader) = i32::parse_bytes(input)?;
         let (input, replicas) = Vec::<i32>::parse_bytes(input)?;

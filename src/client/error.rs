@@ -1,6 +1,9 @@
-use crate::proto::{
-    data::{api_key::ApiKey, error::ErrorCode},
-    ParseError,
+use crate::{
+    proto::{
+        data::{api_key::ApiKey, error::ErrorCode},
+        ParseError,
+    },
+    KafkaError,
 };
 use thiserror::Error;
 
@@ -20,7 +23,7 @@ pub enum Error {
     ProtocolError(String),
 
     #[error("received error response")]
-    ErrorResponse(ErrorCode),
+    ErrorResponse(KafkaError),
 
     #[error("api not supported {:0?}, version {1}")]
     ApiNotSupported(ApiKey, i16),

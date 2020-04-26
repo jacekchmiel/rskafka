@@ -12,7 +12,7 @@ pub struct ApiVersionsV0Request;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ApiVersionsV0Response {
-    pub error: Option<ErrorCode>,
+    pub error_code: ErrorCode,
     pub api_keys: Vec<ApiVersionsRange>,
 }
 
@@ -38,12 +38,6 @@ impl KafkaRequest for ApiVersionsV0Request {
     const API_VERSION: i16 = 0;
 }
 
-impl ApiVersionsV0Response {
-    pub fn from_tuple((error, api_keys): (Option<ErrorCode>, Vec<ApiVersionsRange>)) -> Self {
-        ApiVersionsV0Response { error, api_keys }
-    }
-}
-
 struct UnknownApiKey(pub i16);
 
 fn api_versions_filtered(input: &[u8]) -> nom::IResult<&[u8], Vec<ApiVersionsRange>, ParseError> {
@@ -56,8 +50,11 @@ fn api_versions_filtered(input: &[u8]) -> nom::IResult<&[u8], Vec<ApiVersionsRan
 impl<'a> KafkaWireFormatParse for ApiVersionsV0Response {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         map(
-            tuple((Option::<ErrorCode>::parse_bytes, api_versions_filtered)),
-            ApiVersionsV0Response::from_tuple,
+            tuple((ErrorCode::parse_bytes, api_versions_filtered)),
+            |(error_code, api_keys)| ApiVersionsV0Response {
+                error_code,
+                api_keys,
+            },
         )(input)
     }
 }
@@ -119,7 +116,7 @@ mod test {
     fn api_versions_response_v0_parse() {
         let input = vec![0, 0, 0, 0, 0, 1, 0, 18, 0, 0, 0, 7];
         let expected = ApiVersionsV0Response {
-            error: None,
+            error_code: ErrorCode(0),
             api_keys: vec![ApiVersionsRange {
                 api_key: ApiKey::ApiVersions,
                 min_version: 0,

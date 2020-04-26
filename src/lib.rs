@@ -1,8 +1,5 @@
 pub mod client;
+mod error;
 mod proto;
 
-#[cfg(test)]
-mod test {
-    #[test]
-    fn it_works() {}
-}
+pub use error::KafkaError;
