@@ -1,4 +1,7 @@
-use crate::proto::{data::error::ErrorCode, ParseError};
+use crate::proto::{
+    data::{api_key::ApiKey, error::ErrorCode},
+    ParseError,
+};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -18,4 +21,7 @@ pub enum Error {
 
     #[error("received error response")]
     ErrorResponse(ErrorCode),
+
+    #[error("api not supported {:0?}, version {1}")]
+    ApiNotSupported(ApiKey, i16),
 }

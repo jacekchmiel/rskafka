@@ -17,7 +17,7 @@ impl ErrorCode {
     }
 }
 
-impl<'a> KafkaWireFormatParse<'a> for Option<ErrorCode> {
+impl<'a> KafkaWireFormatParse for Option<ErrorCode> {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         use nom::combinator::map;
         use nom::number::complete::le_i16;

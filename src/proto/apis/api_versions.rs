@@ -10,13 +10,26 @@ use nom::sequence::tuple;
 #[derive(Debug)]
 pub struct ApiVersionsV0Request;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ApiVersionsV0Response {
+    pub error: Option<ErrorCode>,
+    pub api_keys: Vec<ApiVersionsRange>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApiVersionsRange {
+    pub api_key: ApiKey,
+    pub min_version: i16,
+    pub max_version: i16,
+}
+
 impl KafkaWireFormatWrite for ApiVersionsV0Request {
     fn serialized_size(&self) -> usize {
         0
     }
 
-    fn write_into<W: std::io::Write>(&self, _writer: &mut W) -> std::io::Result<usize> {
-        Ok(0)
+    fn write_into<W: std::io::Write>(&self, _writer: &mut W) -> std::io::Result<()> {
+        Ok(())
     }
 }
 
@@ -25,17 +38,13 @@ impl KafkaRequest for ApiVersionsV0Request {
     const API_VERSION: i16 = 0;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ApiVersionsV0Response {
-    pub error: Option<ErrorCode>,
-    pub api_keys: Vec<ApiVersionsRange>,
-}
-
 impl ApiVersionsV0Response {
     pub fn from_tuple((error, api_keys): (Option<ErrorCode>, Vec<ApiVersionsRange>)) -> Self {
         ApiVersionsV0Response { error, api_keys }
     }
 }
+
+struct UnknownApiKey(pub i16);
 
 fn api_versions_filtered(input: &[u8]) -> nom::IResult<&[u8], Vec<ApiVersionsRange>, ParseError> {
     map(
@@ -44,20 +53,13 @@ fn api_versions_filtered(input: &[u8]) -> nom::IResult<&[u8], Vec<ApiVersionsRan
     )(input)
 }
 
-impl<'a> KafkaWireFormatParse<'a> for ApiVersionsV0Response {
+impl<'a> KafkaWireFormatParse for ApiVersionsV0Response {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         map(
             tuple((Option::<ErrorCode>::parse_bytes, api_versions_filtered)),
             ApiVersionsV0Response::from_tuple,
         )(input)
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ApiVersionsRange {
-    pub api_key: ApiKey,
-    pub min_version: i16,
-    pub max_version: i16,
 }
 
 impl ApiVersionsRange {
@@ -70,9 +72,7 @@ impl ApiVersionsRange {
     }
 }
 
-pub struct UnknownApiKey(pub i16);
-
-impl<'a> KafkaWireFormatParse<'a> for Either<ApiVersionsRange, UnknownApiKey> {
+impl KafkaWireFormatParse for Either<ApiVersionsRange, UnknownApiKey> {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         map(
             tuple((be_i16, be_i16, be_i16)),
@@ -86,6 +86,16 @@ impl<'a> KafkaWireFormatParse<'a> for Either<ApiVersionsRange, UnknownApiKey> {
                 None => Either::Right(UnknownApiKey(api_key_code)),
             },
         )(input)
+    }
+}
+
+impl std::fmt::Display for ApiVersionsRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}: {}-{}",
+            self.api_key, self.min_version, self.max_version
+        )
     }
 }
 

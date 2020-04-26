@@ -5,46 +5,40 @@ use nom::combinator::map;
 use std::borrow::Cow;
 use std::convert::TryFrom;
 
-impl<'a> KafkaWireFormatParse<'a> for Cow<'a, [u8]> {
-    fn parse_bytes(input: &'a [u8]) -> nom::IResult<&'a [u8], Self, ParseError> {
+impl KafkaWireFormatParse for Vec<u8> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, ssize) = i32::parse_bytes(input)?;
         let size = usize::try_from(ssize).map_err(|_| custom_error("negative size"))?;
-        map(take(size), Cow::Borrowed)(input)
+        map(take(size), |bytes: &[u8]| Vec::from(bytes))(input)
     }
 }
 
-pub struct CompactBytes<'a>(Cow<'a, [u8]>);
+pub struct CompactBytes(pub Vec<u8>);
 
-impl<'a> CompactBytes<'a> {
-    pub fn with_borrowed(b: &'a [u8]) -> Self {
-        CompactBytes(Cow::Borrowed(b))
-    }
-}
-
-impl<'a> KafkaWireFormatParse<'a> for CompactBytes<'a> {
-    fn parse_bytes(input: &'a [u8]) -> nom::IResult<&'a [u8], Self, ParseError> {
+impl<'a> KafkaWireFormatParse for CompactBytes {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, VarInt(size_encoded)) = VarInt::parse_bytes(input)?;
         let size = usize::try_from(size_encoded - 1).map_err(|_| custom_error("negative size"))?;
         let (input, bytes) = take(size)(input)?;
-        Ok((input, CompactBytes::with_borrowed(bytes)))
+        Ok((input, CompactBytes(Vec::from(bytes))))
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct NullableBytes<'a>(Option<Cow<'a, [u8]>>);
+pub struct NullableBytes(Option<Vec<u8>>);
 
-impl<'a> NullableBytes<'a> {
+impl NullableBytes {
     pub fn with_null() -> Self {
         NullableBytes(None)
     }
 
-    pub fn with_borrowed(b: &'a [u8]) -> Self {
-        NullableBytes(Some(Cow::Borrowed(b)))
+    pub fn with_data(b: &[u8]) -> Self {
+        NullableBytes(Some(Vec::from(b)))
     }
 }
 
-impl<'a> KafkaWireFormatParse<'a> for NullableBytes<'a> {
-    fn parse_bytes(input: &'a [u8]) -> nom::IResult<&'a [u8], Self, ParseError> {
+impl KafkaWireFormatParse for NullableBytes {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, ssize) = i32::parse_bytes(input)?;
         match ssize {
             -1 => Ok((input, NullableBytes::with_null())),
@@ -52,7 +46,7 @@ impl<'a> KafkaWireFormatParse<'a> for NullableBytes<'a> {
             other => {
                 let count = other as usize;
                 // let (_, bytes) = take(count)(input);
-                map(take(count), NullableBytes::with_borrowed)(input)
+                map(take(count), NullableBytes::with_data)(input)
             }
         }
     }
@@ -64,11 +58,11 @@ mod test {
 
     #[test]
     fn parse_bytes() {
-        let expected: &[u8] = &[1, 2, 3];
+        let expected: Vec<u8> = vec![1, 2, 3];
         let remaining: &[u8] = &[4, 5, 6];
         assert_eq!(
-            Cow::parse_bytes(&[0, 0, 0, 3, 1, 2, 3, 4, 5, 6]),
-            Ok((remaining, Cow::Borrowed(expected)))
+            Vec::<u8>::parse_bytes(&[0, 0, 0, 3, 1, 2, 3, 4, 5, 6]),
+            Ok((remaining, (expected)))
         );
     }
 
@@ -86,7 +80,7 @@ mod test {
         let remaining: &[u8] = &[1, 2, 3, 4, 5, 6];
         assert_eq!(
             NullableBytes::parse_bytes(&[0, 0, 0, 0, 1, 2, 3, 4, 5, 6]),
-            Ok((remaining, NullableBytes::with_borrowed(&[])))
+            Ok((remaining, NullableBytes::with_data(&[])))
         );
     }
 
@@ -95,7 +89,7 @@ mod test {
         let remaining: &[u8] = &[4, 5, 6];
         assert_eq!(
             NullableBytes::parse_bytes(&[0, 0, 0, 3, 1, 2, 3, 4, 5, 6]),
-            Ok((remaining, NullableBytes::with_borrowed(&[1, 2, 3])))
+            Ok((remaining, NullableBytes::with_data(&[1, 2, 3])))
         );
     }
 }

@@ -17,18 +17,18 @@ pub(crate) struct RequestHeader<'a> {
 impl<'a> KafkaWireFormatWrite for RequestHeader<'a> {
     fn serialized_size(&self) -> usize {
         self.request_api_key.serialized_size()
-            + std::mem::size_of_val(&self.request_api_version)
-            + std::mem::size_of_val(&self.correlation_id)
+            + self.request_api_version.serialized_size()
+            + self.correlation_id.serialized_size()
             + NullableString(self.client_id.clone()).serialized_size()
     }
 
-    fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<usize> {
+    fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         writer.write_i16::<BigEndian>(self.request_api_key.to_i16())?;
         writer.write_i16::<BigEndian>(self.request_api_version)?;
         writer.write_i32::<BigEndian>(self.correlation_id)?;
         NullableString(self.client_id.clone()).write_into(writer)?;
 
-        Ok(self.serialized_size())
+        Ok(())
     }
 }
 
@@ -37,7 +37,7 @@ pub(crate) struct ResponseHeader {
     pub correlation_id: i32,
 }
 
-impl<'a> KafkaWireFormatParse<'a> for ResponseHeader {
+impl<'a> KafkaWireFormatParse for ResponseHeader {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         use nom::combinator::map;
         use nom::number::complete::be_i32;

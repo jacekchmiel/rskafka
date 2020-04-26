@@ -5,10 +5,11 @@ use thiserror::Error;
 #[error("invalid api key value")]
 pub struct InvalidApiKey;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum ApiKey {
     Produce = 0,
     Fetch = 1,
+    Metadata = 3,
     ApiVersions = 18,
 }
 
@@ -18,6 +19,7 @@ impl ApiKey {
         match v {
             0 => Ok(Produce),
             1 => Ok(Fetch),
+            3 => Ok(Metadata),
             18 => Ok(ApiVersions),
             _ => Err(InvalidApiKey),
         }
@@ -38,11 +40,17 @@ impl Into<i16> for ApiKey {
     }
 }
 
-impl<'a> KafkaWireFormatParse<'a> for ApiKey {
+impl<'a> KafkaWireFormatParse for ApiKey {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         use nom::combinator::map_res;
         use nom::number::complete::be_i16;
 
         map_res(be_i16, ApiKey::try_from_i16)(input)
+    }
+}
+
+impl std::fmt::Display for ApiKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}({})", self, self.to_i16())
     }
 }

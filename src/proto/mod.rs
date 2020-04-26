@@ -8,7 +8,7 @@ use thiserror::Error;
 /// Object that can be written in Kafka Protocol wire format
 pub(crate) trait KafkaWireFormatWrite {
     fn serialized_size(&self) -> usize;
-    fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<usize>;
+    fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()>;
 
     /// Writes data to new byte vector
     #[cfg(test)]
@@ -21,21 +21,33 @@ pub(crate) trait KafkaWireFormatWrite {
     }
 }
 
+pub(crate) trait KafkaWireFormatStaticSize {
+    fn serialized_size_static() -> usize;
+}
+
 /// Represents a concrete request in Kafka Protocol wire format.
 /// Has specific Api Key, Api Version and can be written in wire format.
 pub(crate) trait KafkaRequest: KafkaWireFormatWrite {
     const API_KEY: ApiKey;
     const API_VERSION: i16;
+
+    fn api_key(&self) -> ApiKey {
+        Self::API_KEY
+    }
+
+    fn api_version(&self) -> i16 {
+        Self::API_VERSION
+    }
 }
 
 /// Object that can be parsed from Kafka Protocol wire data
-pub(crate) trait KafkaWireFormatParse<'a>: Sized {
+pub(crate) trait KafkaWireFormatParse: Sized {
     /// Parses bytes to create Self, borrowing data from buffer (lifetime of created object
     /// is bound to buffer lifetime). Follows nom protocol for easy parser combinations.
-    fn parse_bytes(input: &'a [u8]) -> IResult<&'a [u8], Self, ParseError>;
+    fn parse_bytes(input: &[u8]) -> IResult<&[u8], Self, ParseError>;
 
     /// Creates object from exact number of bytes (can return ParseError::TooMuchData)
-    fn from_wire_bytes(input: &'a [u8]) -> Result<Self, ParseError> {
+    fn from_wire_bytes(input: &[u8]) -> Result<Self, ParseError> {
         match Self::parse_bytes(input) {
             Ok((&[], parsed)) => Ok(parsed),
             Ok((rem, _)) => Err(ParseError::TooMuchData(rem.len())),
@@ -45,7 +57,7 @@ pub(crate) trait KafkaWireFormatParse<'a>: Sized {
     }
 
     /// Creates object from bytes. Does not return ParseError::TooMuchData if buffer contains more data.
-    fn from_wire_bytes_buffer(input: &'a [u8]) -> Result<Self, ParseError> {
+    fn from_wire_bytes_buffer(input: &[u8]) -> Result<Self, ParseError> {
         match Self::parse_bytes(input) {
             Ok((_, parsed)) => Ok(parsed),
             Err(nom::Err::Incomplete(needed)) => Err(ParseError::Incomplete(needed)),
@@ -95,4 +107,8 @@ impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for ParseError {
 
 fn custom_error(s: &'static str) -> nom::Err<ParseError> {
     nom::Err::Error(ParseError::Custom(s))
+}
+
+fn custom_io_error<E: std::error::Error + Send + Sync + 'static>(e: E) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, e)
 }

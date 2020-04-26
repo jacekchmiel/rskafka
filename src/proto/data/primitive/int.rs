@@ -1,33 +1,99 @@
-use crate::proto::KafkaWireFormatParse;
+use crate::proto::{KafkaWireFormatParse, KafkaWireFormatStaticSize, KafkaWireFormatWrite};
+use byteorder::{BigEndian, WriteBytesExt};
+use std::io::Write;
 
-impl<'a> KafkaWireFormatParse<'a> for i16 {
+impl KafkaWireFormatParse for i16 {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
         nom::number::complete::be_i16(input)
     }
 }
 
-impl<'a> KafkaWireFormatParse<'a> for i32 {
+impl KafkaWireFormatWrite for i16 {
+    fn serialized_size(&self) -> usize {
+        Self::serialized_size_static()
+    }
+
+    fn write_into<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_i16::<BigEndian>(*self)
+    }
+}
+
+impl KafkaWireFormatStaticSize for i16 {
+    fn serialized_size_static() -> usize {
+        std::mem::size_of::<Self>()
+    }
+}
+
+impl<'a> KafkaWireFormatParse for i32 {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
         nom::number::complete::be_i32(input)
     }
 }
 
-impl<'a> KafkaWireFormatParse<'a> for i64 {
+impl KafkaWireFormatWrite for i32 {
+    fn serialized_size(&self) -> usize {
+        Self::serialized_size_static()
+    }
+
+    fn write_into<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_i32::<BigEndian>(*self)
+    }
+}
+
+impl KafkaWireFormatStaticSize for i32 {
+    fn serialized_size_static() -> usize {
+        std::mem::size_of::<Self>()
+    }
+}
+
+impl<'a> KafkaWireFormatParse for i64 {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
         nom::number::complete::be_i64(input)
     }
 }
 
-impl<'a> KafkaWireFormatParse<'a> for u32 {
+impl KafkaWireFormatWrite for i64 {
+    fn serialized_size(&self) -> usize {
+        Self::serialized_size_static()
+    }
+
+    fn write_into<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_i64::<BigEndian>(*self)
+    }
+}
+
+impl KafkaWireFormatStaticSize for i64 {
+    fn serialized_size_static() -> usize {
+        std::mem::size_of::<Self>()
+    }
+}
+
+impl KafkaWireFormatParse for u32 {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
         nom::number::complete::be_u32(input)
     }
 }
 
+impl KafkaWireFormatWrite for u32 {
+    fn serialized_size(&self) -> usize {
+        Self::serialized_size_static()
+    }
+
+    fn write_into<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_u32::<BigEndian>(*self)
+    }
+}
+
+impl KafkaWireFormatStaticSize for u32 {
+    fn serialized_size_static() -> usize {
+        std::mem::size_of::<Self>()
+    }
+}
+
 pub struct VarInt(pub i32);
 
-impl<'a> KafkaWireFormatParse<'a> for VarInt {
-    fn parse_bytes(_input: &'a [u8]) -> nom::IResult<&'a [u8], Self, crate::proto::ParseError> {
+impl KafkaWireFormatParse for VarInt {
+    fn parse_bytes(_input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
         todo!()
     }
 }
