@@ -2,7 +2,9 @@ mod bytes;
 mod int;
 mod string;
 
-use crate::proto::{KafkaWireFormatParse, KafkaWireFormatWrite, ParseError};
+use crate::proto::{
+    KafkaWireFormatParse, KafkaWireFormatStaticSize, KafkaWireFormatWrite, ParseError,
+};
 use nom::{
     bytes::complete::take,
     combinator::{flat_map, map, map_res},
@@ -20,6 +22,23 @@ impl KafkaWireFormatParse for bool {
             1u8 => Ok(true),
             _ => Err(ParseError::Custom("invalid bool value")),
         })(input)
+    }
+}
+
+impl KafkaWireFormatWrite for bool {
+    fn serialized_size(&self) -> usize {
+        Self::serialized_size_static()
+    }
+
+    fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        let byte = if *self { 0x01 } else { 0x00 };
+        writer.write_all(&[byte]).map(|_| ())
+    }
+}
+
+impl KafkaWireFormatStaticSize for bool {
+    fn serialized_size_static() -> usize {
+        std::mem::size_of::<u8>()
     }
 }
 

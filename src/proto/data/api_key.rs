@@ -11,6 +11,7 @@ pub enum ApiKey {
     Fetch = 1,
     Metadata = 3,
     ApiVersions = 18,
+    CreateTopics = 19,
 }
 
 impl ApiKey {
@@ -21,6 +22,7 @@ impl ApiKey {
             1 => Ok(Fetch),
             3 => Ok(Metadata),
             18 => Ok(ApiVersions),
+            19 => Ok(CreateTopics),
             _ => Err(InvalidApiKey),
         }
     }

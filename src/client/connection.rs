@@ -4,11 +4,15 @@ use log::{debug, trace};
 use proto::{
     apis::{
         api_versions::{ApiVersionsRange, ApiVersionsV0Request, ApiVersionsV0Response},
-        topic_metadata::{MetadataRequestV2, MetadataResponseV2, TopicMetadata},
+        create_topics::{
+            CreateTopic, CreateTopicResponse, CreateTopicsRequestV1, CreateTopicsResponseV1,
+        },
+        topic_metadata::{MetadataRequestV2, MetadataResponseV2},
     },
     data::{api_key::ApiKey, header::ResponseHeader, write_request},
     KafkaRequest, KafkaWireFormatParse,
 };
+use std::convert::TryInto;
 use std::io::Read;
 use std::{
     collections::HashMap,
@@ -48,10 +52,38 @@ impl BrokerConnection {
     pub fn get_metadata(&mut self, topics: Vec<String>) -> Result<MetadataResponseV2, Error> {
         debug!("get_metadata topics={:?}", topics);
         let request = MetadataRequestV2 { topics };
+
         self.ensure_api_supported(&request)?;
         let response: MetadataResponseV2 = self.exchange(&request)?;
 
         Ok(response)
+    }
+
+    pub fn create_topics(
+        &mut self,
+        topics: Vec<CreateTopic>,
+        timeout: Duration,
+        validate_only: bool,
+    ) -> Result<Vec<CreateTopicResponse>, Error> {
+        debug!(
+            "create_topics topic={:?} timeout={:?}",
+            topics.iter().map(|t| t.name.as_str()),
+            timeout
+        );
+
+        let request = CreateTopicsRequestV1 {
+            topics,
+            timeout_ms: timeout
+                .as_millis()
+                .try_into()
+                .map_err(|_| Error::ValueError("invalid timeout value".into()))?,
+            validate_only,
+        };
+
+        self.ensure_api_supported(&request)?;
+        let response: CreateTopicsResponseV1 = self.exchange(&request)?;
+
+        Ok(response.topics)
     }
 
     fn exchange<'a, Req: KafkaRequest, Rsp: KafkaWireFormatParse>(

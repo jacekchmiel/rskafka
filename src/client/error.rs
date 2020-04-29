@@ -5,6 +5,7 @@ use crate::{
     },
     KafkaError,
 };
+use std::borrow::Cow;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -27,4 +28,7 @@ pub enum Error {
 
     #[error("api not supported {:0?}, version {1}")]
     ApiNotSupported(ApiKey, i16),
+
+    #[error("value error: {0}")]
+    ValueError(Cow<'static, str>),
 }

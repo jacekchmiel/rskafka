@@ -3,7 +3,7 @@ use crate::{
     KafkaError,
 };
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct ErrorCode(pub(crate) i16);
 
 impl ErrorCode {

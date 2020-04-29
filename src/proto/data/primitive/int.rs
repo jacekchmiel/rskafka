@@ -2,6 +2,28 @@ use crate::proto::{KafkaWireFormatParse, KafkaWireFormatStaticSize, KafkaWireFor
 use byteorder::{BigEndian, WriteBytesExt};
 use std::io::Write;
 
+impl KafkaWireFormatParse for i8 {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+        nom::number::complete::be_i8(input)
+    }
+}
+
+impl KafkaWireFormatWrite for i8 {
+    fn serialized_size(&self) -> usize {
+        Self::serialized_size_static()
+    }
+
+    fn write_into<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_i8(*self)
+    }
+}
+
+impl KafkaWireFormatStaticSize for i8 {
+    fn serialized_size_static() -> usize {
+        std::mem::size_of::<Self>()
+    }
+}
+
 impl KafkaWireFormatParse for i16 {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
         nom::number::complete::be_i16(input)

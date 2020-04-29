@@ -1,24 +1,31 @@
 extern crate rskafka;
 
 use log::info;
-use rskafka::client::{ClientConfig, Error, SimpleClient};
+use rskafka::client::{BrokerConnection, ClientConfig, CreateTopic, Error};
+use std::time::Duration;
 
-#[test]
-fn read_versions() -> Result<(), Error> {
+fn init_logger() {
     env_logger::Builder::new()
         .filter_level(log::LevelFilter::Trace)
         .is_test(true)
         .try_init()
         .ok();
+}
 
-    info!("read_versions");
-
-    let mut client = SimpleClient::connect(
+fn connect() -> Result<BrokerConnection, Error> {
+    BrokerConnection::connect(
         ClientConfig::builder()
             .bootstrap_servers("localhost:9092".to_string())
             .build()?,
-    )?;
-    let versions = client.get_api_versions()?;
+    )
+}
+
+#[test]
+fn read_versions() -> Result<(), Error> {
+    init_logger();
+    let mut c = connect()?;
+
+    let versions = c.get_api_versions()?;
     info!("Supported versions:\n{:#?}", versions);
 
     Ok(())
@@ -26,21 +33,26 @@ fn read_versions() -> Result<(), Error> {
 
 #[test]
 fn read_metadata() -> Result<(), Error> {
-    env_logger::Builder::new()
-        .filter_level(log::LevelFilter::Trace)
-        .is_test(true)
-        .try_init()
-        .ok();
+    init_logger();
+    let mut c = connect()?;
 
-    info!("read_metadata");
-
-    let mut client = SimpleClient::connect(
-        ClientConfig::builder()
-            .bootstrap_servers("localhost:9092".to_string())
-            .build()?,
-    )?;
-    let metadata = client.get_metadata(vec![String::from("test-topic")])?;
+    let metadata = c.get_metadata(vec![String::from("test-topic")])?;
     info!("Metadata:\n{:#?}", metadata);
+
+    Ok(())
+}
+
+#[test]
+fn create_topic() -> Result<(), Error> {
+    init_logger();
+    let mut c = connect()?;
+
+    let topic = CreateTopic::with_name("rskafka-create-topic-test")
+        .partitions(2)
+        .replication_factor(1);
+
+    let created_topics = c.create_topics(vec![topic], Duration::from_secs(1), false)?;
+    info!("Response:\n{:#?}", created_topics);
 
     Ok(())
 }

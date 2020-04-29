@@ -50,6 +50,32 @@ impl<'a> NullableString<'a> {
     pub fn with_null() -> Self {
         NullableString(None)
     }
+
+    pub fn into_owned_option(self) -> Option<String> {
+        match self.0 {
+            Some(Cow::Owned(string)) => Some(string),
+            Some(Cow::Borrowed(string)) => Some(string.to_owned()),
+            None => None,
+        }
+    }
+}
+
+impl<'a> From<Option<&'a str>> for NullableString<'a> {
+    fn from(v: Option<&'a str>) -> Self {
+        match v {
+            Some(string) => NullableString::with_borrowed(string),
+            None => NullableString::with_null(),
+        }
+    }
+}
+
+impl<'a> From<&'a Option<String>> for NullableString<'a> {
+    fn from(v: &'a Option<String>) -> Self {
+        match v {
+            Some(string) => NullableString::with_borrowed(string.as_str()),
+            None => NullableString::with_null(),
+        }
+    }
 }
 
 impl NullableString<'static> {
