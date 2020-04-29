@@ -1,7 +1,7 @@
 mod config;
+mod connection;
 mod error;
-mod simple;
 
 pub use config::{ClientConfig, ClientConfigBuilder};
+pub use connection::BrokerConnection;
 pub use error::Error;
-pub use simple::SimpleClient;

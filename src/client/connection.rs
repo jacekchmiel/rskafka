@@ -16,19 +16,19 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub struct SimpleClient {
+pub struct BrokerConnection {
     config: ClientConfig,
     stream: TcpStream,
     api_versions: Option<HashMap<ApiKey, ApiVersionsRange>>,
     last_correlation_id: i32,
 }
 
-impl SimpleClient {
+impl BrokerConnection {
     pub fn connect(config: ClientConfig) -> Result<Self, Error> {
         let stream = TcpStream::connect(&config.bootstrap_servers)?;
         stream.set_read_timeout(Some(config.tcp_read_timeout))?;
         stream.set_write_timeout(Some(config.tcp_write_timeout))?;
-        Ok(SimpleClient {
+        Ok(BrokerConnection {
             config,
             stream,
             api_versions: None,
@@ -183,7 +183,7 @@ mod test {
 
     #[test]
     fn create_client() {
-        let _ = SimpleClient::connect(
+        let _ = BrokerConnection::connect(
             ClientConfig::builder()
                 .bootstrap_servers("localhost:9092".to_string())
                 .build()
