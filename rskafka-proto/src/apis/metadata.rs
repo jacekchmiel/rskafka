@@ -1,7 +1,6 @@
-use crate::proto::data::{api_key::ApiKey, error::ErrorCode, primitive::NullableString, BrokerId};
-use crate::proto::{custom_error, KafkaRequest, KafkaWireFormatParse, KafkaWireFormatWrite};
-use nom::sequence::tuple;
-use std::borrow::Cow;
+use crate::data::{api_key::ApiKey, error::ErrorCode, primitive::NullableString, BrokerId};
+use crate::{error::custom_error, wire_format::*, ParseError};
+use std::convert::TryFrom;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetadataRequestV2 {
@@ -36,7 +35,7 @@ pub struct TopicMetadata {
 pub struct PartitionMetadata {
     pub error: ErrorCode,
     pub partition_index: i32,
-    pub leader: i32,
+    pub leader: BrokerId,
     pub replicas: Vec<i32>,
     pub isr: Vec<i32>,
 }
@@ -57,7 +56,7 @@ impl KafkaRequest for MetadataRequestV2 {
 }
 
 impl KafkaWireFormatParse for MetadataResponseV2 {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, brokers) = Vec::<BrokerMetadata>::parse_bytes(input)?;
         let (input, cluster_id) = NullableString::parse_bytes(input)?;
         let (input, controller_id) = i32::parse_bytes(input)?;
@@ -73,10 +72,11 @@ impl KafkaWireFormatParse for MetadataResponseV2 {
         Ok((input, metadata_response))
     }
 }
-use std::convert::TryFrom;
+
+impl KafkaResponse for MetadataResponseV2 {}
 
 impl<'a> KafkaWireFormatParse for BrokerMetadata {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, node_id) = i32::parse_bytes(input)?;
         let (input, host) = String::parse_bytes(input)?;
         let (input, port) = i32::parse_bytes(input)?;
@@ -95,7 +95,7 @@ impl<'a> KafkaWireFormatParse for BrokerMetadata {
 }
 
 impl<'a> KafkaWireFormatParse for TopicMetadata {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, error) = ErrorCode::parse_bytes(input)?;
         let (input, name) = String::parse_bytes(input)?;
         let (input, is_internal) = bool::parse_bytes(input)?;
@@ -113,7 +113,7 @@ impl<'a> KafkaWireFormatParse for TopicMetadata {
 }
 
 impl<'a> KafkaWireFormatParse for PartitionMetadata {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, error) = ErrorCode::parse_bytes(input)?;
         let (input, partition_index) = i32::parse_bytes(input)?;
         let (input, leader) = i32::parse_bytes(input)?;
@@ -123,7 +123,7 @@ impl<'a> KafkaWireFormatParse for PartitionMetadata {
         let partition_metadata = PartitionMetadata {
             error,
             partition_index,
-            leader,
+            leader: BrokerId(leader),
             replicas,
             isr,
         };

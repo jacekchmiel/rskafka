@@ -1,9 +1,9 @@
-use crate::proto::{KafkaWireFormatParse, KafkaWireFormatStaticSize, KafkaWireFormatWrite};
+use crate::{wire_format::*, ParseError};
 use byteorder::{BigEndian, WriteBytesExt};
 use std::io::Write;
 
 impl KafkaWireFormatParse for i8 {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         nom::number::complete::be_i8(input)
     }
 }
@@ -25,7 +25,7 @@ impl KafkaWireFormatStaticSize for i8 {
 }
 
 impl KafkaWireFormatParse for i16 {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         nom::number::complete::be_i16(input)
     }
 }
@@ -47,7 +47,7 @@ impl KafkaWireFormatStaticSize for i16 {
 }
 
 impl<'a> KafkaWireFormatParse for i32 {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         nom::number::complete::be_i32(input)
     }
 }
@@ -69,7 +69,7 @@ impl KafkaWireFormatStaticSize for i32 {
 }
 
 impl<'a> KafkaWireFormatParse for i64 {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         nom::number::complete::be_i64(input)
     }
 }
@@ -91,7 +91,7 @@ impl KafkaWireFormatStaticSize for i64 {
 }
 
 impl KafkaWireFormatParse for u32 {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         nom::number::complete::be_u32(input)
     }
 }
@@ -115,7 +115,7 @@ impl KafkaWireFormatStaticSize for u32 {
 pub struct VarInt(pub i32);
 
 impl KafkaWireFormatParse for VarInt {
-    fn parse_bytes(_input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(_input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         todo!()
     }
 }

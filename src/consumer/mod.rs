@@ -1,20 +1,19 @@
 use crate::{
-    client::{self, AsyncClusterClient, Broker},
+    client::{AsyncClusterClient, Broker},
     message::KafkaPartition,
-    proto::{
-        apis::{
-            find_coordinator::{self, FindCoordinatorRequestV2, FindCoordinatorResponseV2},
-            join_group::{JoinGroupRequestV4, JoinGroupResponseV4},
-            metadata::{MetadataRequestV2, MetadataResponseV2},
-        },
-        data::{error::ErrorCode, BrokerId},
-    },
     Error, KafkaMessage, KafkaOffset,
 };
 use futures::prelude::*;
 use log::{debug, error, info, log_enabled, trace};
+use rskafka_proto::{
+    apis::{
+        find_coordinator::{self, FindCoordinatorRequestV2, FindCoordinatorResponseV2},
+        join_group::{JoinGroupRequestV4, JoinGroupResponseV4},
+        metadata::{MetadataRequestV2, MetadataResponseV2},
+    },
+    BrokerId, ErrorCode,
+};
 use std::{
-    borrow::Cow,
     collections::HashMap,
     pin::Pin,
     sync::Arc,
@@ -177,7 +176,7 @@ impl ConsumerInternals {
                         topic_name: t.name.clone(),
                         partition_index: p.partition_index,
                     };
-                    (partition, BrokerId(leader))
+                    (partition, leader)
                 })
             })
             .collect();

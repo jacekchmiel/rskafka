@@ -1,9 +1,7 @@
 use super::async_connection::{BrokerConnection, Managed};
-use crate::{
-    proto::{apis::metadata::MetadataRequestV2, data::BrokerId, KafkaRequest},
-    Error,
-};
+use crate::Error;
 use log::{debug, error, info, log_enabled};
+use rskafka_proto::{apis::metadata::MetadataRequestV2, BrokerId, KafkaRequest};
 use std::collections::HashMap;
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -61,15 +59,21 @@ impl AsyncClusterClient {
         r: R,
         broker: Broker,
     ) -> Result<R::Response, Error> {
-        let mut managed = self.get_connection(broker).await;
+        let mut managed = self.get_connection(broker).await?;
         let conn = managed.get().await?;
         conn.make_request(&r).await
     }
 
-    async fn get_connection<'a>(&'a self, broker: Broker) -> MutexGuard<'a, Managed> {
+    async fn get_connection<'a>(
+        &'a self,
+        broker: Broker,
+    ) -> Result<MutexGuard<'a, Managed>, Error> {
         match broker {
-            Broker::Any => self.conns.values().next().unwrap().lock().await,
-            Broker::Id(id) => todo!(),
+            Broker::Any => Ok(self.conns.values().next().unwrap().lock().await),
+            Broker::Id(id) => match self.conns.get(&id) {
+                Some(conn) => Ok(conn.lock().await),
+                None => Err(Error::ClusterError(format!("Broker {} not found", id))),
+            },
         }
     }
 }
@@ -79,15 +83,6 @@ pub enum Broker {
     Any,
     Id(BrokerId),
 }
-
-// struct ConnectionManager {
-//     addrs: HashMap<BrokerId, String>,
-//     conns: HashMap<BrokerId, Mutex<AsyncBrokerConnection>>,
-// }
-
-// impl ConnectionManager {
-//     async fn get_connection<'a>(&'a self, broker: Broker) -> MutexGuard<'a, AsyncBrokerConnection> {
-// }
 
 #[cfg(test)]
 mod test {

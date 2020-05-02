@@ -1,10 +1,8 @@
-use super::connection::ResponseBuffer;
-use crate::{proto, Error};
+use crate::Error;
 use log::{debug, trace};
-use proto::{
-    apis::api_versions::{ApiVersionsRange, ApiVersionsV0Request},
-    data::{error::ErrorCode, header::ResponseHeader, write_request},
-    KafkaRequest, KafkaWireFormatParse,
+use rskafka_proto::{
+    apis::api_versions::{ApiVersionsRange, ApiVersionsRequestV0},
+    ErrorCode, KafkaRequest, KafkaResponse,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -30,7 +28,7 @@ impl BrokerConnection {
 
     pub(crate) async fn get_api_versions(&mut self) -> Result<Vec<ApiVersionsRange>, Error> {
         debug!("get_api_versions");
-        let response = self.make_request(&ApiVersionsV0Request).await?;
+        let response = self.make_request(&ApiVersionsRequestV0).await?;
         match response.error_code {
             ErrorCode(0) => Ok(response.api_keys),
             error_code => Err(error_code.into()),
@@ -44,56 +42,49 @@ impl BrokerConnection {
         // self.ensure_api_supported(request)?;
         self.last_correlation_id += 1;
         let mut request_buffer = Vec::new();
-        write_request(
+
+        request.write_bytes(
             &mut request_buffer,
-            request,
             self.last_correlation_id,
             Some(&self.client_id),
-        )?;
+        );
 
         self.stream.write_all(&request_buffer).await?;
         let response_bytes = self.read_response(self.last_correlation_id).await?;
-        let response = Req::Response::from_wire_bytes(response_bytes.data())?;
+        let response = Req::Response::from_bytes(&response_bytes)?;
 
         Ok(response)
     }
 
-    async fn read_response(&mut self, correlation_id: i32) -> Result<ResponseBuffer, Error> {
-        trace!("wait_for_response: correlation_id={}", correlation_id);
-        let mut size_buffer: [u8; 4] = [0, 0, 0, 0];
-        // self.stream.set_read_timeout(Some(timer.left()))?;
-        if let Err(e) = self.stream.read_exact(&mut size_buffer).await {
-            //TODO: continue on timeout
-            return Err(e.into());
-        }
+    async fn read_response(&mut self, correlation_id: i32) -> Result<Vec<u8>, Error> {
+        let size = self.read_be_i32().await?; //TODO: check if size > 4
+        trace!("read_response: size={}", size);
+        let recv_correlation_id = self.read_be_i32().await?;
+        trace!("read_response: correlation_id={}", recv_correlation_id);
 
-        let size = i32::from_be_bytes(size_buffer);
-
-        trace!("wait_for_response: received_size_bytes={:?}", size_buffer);
-        trace!("wait_for_response: received_size={}", size);
-
-        let mut data_buffer = vec![0; size as usize]; //TODO: conversion error
-
-        // self.stream.set_read_timeout(Some(timer.left()))?;
+        let mut data_buffer = vec![0; (size - 4) as usize]; //TODO: conversion error
         if let Err(e) = self.stream.read_exact(data_buffer.as_mut()).await {
-            //TODO: continue on timeout
             return Err(e.into());
         }
 
-        trace!("wait_for_response: received_bytes={:?}", data_buffer);
-        let header = ResponseHeader::from_wire_bytes_buffer(&data_buffer)?;
-        if header.correlation_id == correlation_id {
-            Ok(ResponseBuffer::new(data_buffer))
-        // return Ok(R::from_wire_bytes(&response_bytes)?);
+        trace!("read_response: response_bytes={:?}", data_buffer);
+        if recv_correlation_id == correlation_id {
+            Ok(data_buffer)
         } else {
             return Err(Error::ProtocolError(
                 format!(
                     "unexpected correlation_id={}, expected correlation_id={}",
-                    header.correlation_id, correlation_id
+                    recv_correlation_id, correlation_id
                 )
                 .into(),
             ));
         }
+    }
+
+    async fn read_be_i32(&mut self) -> Result<i32, Error> {
+        let mut buffer: [u8; 4] = [0, 0, 0, 0];
+        self.stream.read_exact(&mut buffer).await?;
+        Ok(i32::from_be_bytes(buffer))
     }
 }
 
@@ -127,7 +118,7 @@ impl Managed {
 mod test {
     use super::*;
     use log::info;
-    use proto::apis::{
+    use rskafka_proto::apis::{
         create_topics::{CreateTopic, CreateTopicsRequestV1},
         metadata::MetadataRequestV2,
     };

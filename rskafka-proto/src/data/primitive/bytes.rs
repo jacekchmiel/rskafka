@@ -1,8 +1,7 @@
 use super::int::VarInt;
-use crate::proto::{custom_error, KafkaWireFormatParse, ParseError};
+use crate::{error::custom_error, wire_format::*, ParseError};
 use nom::bytes::complete::take;
 use nom::combinator::map;
-use std::borrow::Cow;
 use std::convert::TryFrom;
 
 impl KafkaWireFormatParse for Vec<u8> {

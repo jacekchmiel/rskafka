@@ -1,6 +1,7 @@
-use crate::proto::{
+use crate::{
     data::{api_key::ApiKey, error::ErrorCode},
-    KafkaRequest, KafkaWireFormatParse, KafkaWireFormatWrite, ParseError,
+    wire_format::*,
+    ParseError,
 };
 use either::Either;
 use nom::combinator::map;
@@ -8,10 +9,10 @@ use nom::number::complete::be_i16;
 use nom::sequence::tuple;
 
 #[derive(Debug)]
-pub struct ApiVersionsV0Request;
+pub struct ApiVersionsRequestV0;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ApiVersionsV0Response {
+pub struct ApiVersionsResponseV0 {
     pub error_code: ErrorCode,
     pub api_keys: Vec<ApiVersionsRange>,
 }
@@ -23,7 +24,7 @@ pub struct ApiVersionsRange {
     pub max_version: i16,
 }
 
-impl KafkaWireFormatWrite for ApiVersionsV0Request {
+impl KafkaWireFormatWrite for ApiVersionsRequestV0 {
     fn serialized_size(&self) -> usize {
         0
     }
@@ -33,10 +34,10 @@ impl KafkaWireFormatWrite for ApiVersionsV0Request {
     }
 }
 
-impl KafkaRequest for ApiVersionsV0Request {
+impl KafkaRequest for ApiVersionsRequestV0 {
     const API_KEY: ApiKey = ApiKey::ApiVersions;
     const API_VERSION: i16 = 0;
-    type Response = ApiVersionsV0Response;
+    type Response = ApiVersionsResponseV0;
 }
 
 struct UnknownApiKey(pub i16);
@@ -48,17 +49,19 @@ fn api_versions_filtered(input: &[u8]) -> nom::IResult<&[u8], Vec<ApiVersionsRan
     )(input)
 }
 
-impl<'a> KafkaWireFormatParse for ApiVersionsV0Response {
+impl KafkaWireFormatParse for ApiVersionsResponseV0 {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         map(
             tuple((ErrorCode::parse_bytes, api_versions_filtered)),
-            |(error_code, api_keys)| ApiVersionsV0Response {
+            |(error_code, api_keys)| ApiVersionsResponseV0 {
                 error_code,
                 api_keys,
             },
         )(input)
     }
 }
+
+impl KafkaResponse for ApiVersionsResponseV0 {}
 
 impl ApiVersionsRange {
     pub fn from_tuple((api_key, min_version, max_version): (ApiKey, i16, i16)) -> Self {
@@ -100,11 +103,10 @@ impl std::fmt::Display for ApiVersionsRange {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::proto::data::request_bytes;
 
     #[test]
     fn api_versions_v0_request_wire_format() {
-        let bytes = request_bytes(&ApiVersionsV0Request, 1, Some("rskafka"));
+        let bytes = ApiVersionsRequestV0.to_bytes(1, Some("rskafka"));
         let expected = vec![
             0x00, 0x00, 0x00, 0x11, 0x00, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x07,
             0x72, 0x73, 0x6b, 0x61, 0x66, 0x6b, 0x61,
@@ -116,7 +118,7 @@ mod test {
     #[test]
     fn api_versions_response_v0_parse() {
         let input = vec![0, 0, 0, 0, 0, 1, 0, 18, 0, 0, 0, 7];
-        let expected = ApiVersionsV0Response {
+        let expected = ApiVersionsResponseV0 {
             error_code: ErrorCode(0),
             api_keys: vec![ApiVersionsRange {
                 api_key: ApiKey::ApiVersions,
@@ -124,6 +126,6 @@ mod test {
                 max_version: 7,
             }],
         };
-        assert_eq!(ApiVersionsV0Response::from_wire_bytes(&input), Ok(expected));
+        assert_eq!(ApiVersionsResponseV0::from_wire_bytes(&input), Ok(expected));
     }
 }

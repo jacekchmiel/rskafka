@@ -1,7 +1,4 @@
-use crate::proto::{
-    data::{api_key::ApiKey, error::ErrorCode},
-    ParseError,
-};
+use rskafka_proto::{ApiKey, ErrorCode, ParseError};
 use std::borrow::Cow;
 use thiserror::Error;
 // #[derive(Debug, Error)]

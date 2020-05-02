@@ -1,6 +1,7 @@
-use crate::proto::{
+use crate::{
     data::{api_key::ApiKey, error::ErrorCode, primitive::NullableString, BrokerId},
-    KafkaRequest, KafkaWireFormatParse, KafkaWireFormatStaticSize, KafkaWireFormatWrite,
+    wire_format::*,
+    ParseError,
 };
 #[derive(Debug, Clone, PartialEq)]
 pub struct FindCoordinatorRequestV2 {
@@ -55,7 +56,7 @@ impl KafkaWireFormatWrite for FindCoordinatorRequestV2 {
 }
 
 impl KafkaWireFormatParse for FindCoordinatorResponseV2 {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, throttle_time_ms) = i32::parse_bytes(input)?;
         let (input, error_code) = ErrorCode::parse_bytes(input)?;
         let (input, error_message) = NullableString::parse_bytes(input)?;
@@ -75,6 +76,8 @@ impl KafkaWireFormatParse for FindCoordinatorResponseV2 {
         Ok((input, response))
     }
 }
+
+impl KafkaResponse for FindCoordinatorResponseV2 {}
 
 #[cfg(test)]
 mod test {

@@ -1,4 +1,4 @@
-use crate::proto::{KafkaWireFormatParse, ParseError};
+use crate::{wire_format::*, ParseError};
 use thiserror::Error;
 
 #[derive(Debug, Error)]

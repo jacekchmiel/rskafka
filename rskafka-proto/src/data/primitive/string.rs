@@ -1,6 +1,7 @@
-use crate::proto::{
-    custom_error, custom_io_error, KafkaWireFormatParse, KafkaWireFormatStaticSize,
-    KafkaWireFormatWrite,
+use crate::{
+    error::{custom_error, custom_io_error},
+    wire_format::*,
+    ParseError,
 };
 use byteorder::{BigEndian, WriteBytesExt};
 use nom::bytes::complete::take;
@@ -8,7 +9,7 @@ use std::borrow::Cow;
 use std::convert::TryFrom;
 
 impl KafkaWireFormatParse for String {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, size) = i16::parse_bytes(input)?;
         let size = usize::try_from(size).map_err(|_| custom_error("negative size"))?;
 
@@ -107,7 +108,7 @@ impl<'a> KafkaWireFormatWrite for NullableString<'a> {
 }
 
 impl KafkaWireFormatParse for NullableString<'static> {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, ssize) = i16::parse_bytes(input)?;
         match ssize {
             -1 => Ok((input, NullableString::with_null())),
@@ -139,7 +140,7 @@ impl<'a> CompactNullableString<'a> {
 }
 
 impl KafkaWireFormatParse for CompactNullableString<'static> {
-    fn parse_bytes(_input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(_input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         // map(compact_nullable_bytes, |v| v.map(try_into_utf8))(input)
         todo!()
     }

@@ -1,6 +1,7 @@
-use crate::proto::{
+use crate::{
     data::{api_key::ApiKey, error::ErrorCode, primitive::NullableString},
-    KafkaRequest, KafkaWireFormatParse, KafkaWireFormatWrite,
+    wire_format::*,
+    ParseError,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -129,8 +130,10 @@ impl KafkaRequest for CreateTopicsRequestV1 {
     type Response = CreateTopicsResponseV1;
 }
 
+impl KafkaResponse for CreateTopicsResponseV1 {}
+
 impl KafkaWireFormatParse for CreateTopicsResponseV1 {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, topics) = KafkaWireFormatParse::parse_bytes(input)?;
 
         Ok((input, CreateTopicsResponseV1 { topics }))
@@ -138,7 +141,7 @@ impl KafkaWireFormatParse for CreateTopicsResponseV1 {
 }
 
 impl KafkaWireFormatParse for CreateTopicResponse {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         use nom::sequence::tuple;
         let (input, fields) = tuple((
             String::parse_bytes,

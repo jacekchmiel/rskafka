@@ -2,9 +2,7 @@ mod bytes;
 mod int;
 mod string;
 
-use crate::proto::{
-    KafkaWireFormatParse, KafkaWireFormatStaticSize, KafkaWireFormatWrite, ParseError,
-};
+use crate::{wire_format::*, ParseError};
 use nom::{
     bytes::complete::take,
     combinator::{flat_map, map, map_res},
@@ -16,7 +14,7 @@ pub use string::{CompactNullableString, NullableString};
 use uuid::Uuid;
 
 impl KafkaWireFormatParse for bool {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         map_res(be_u8, |byte| match byte {
             0u8 => Ok(false),
             1u8 => Ok(true),

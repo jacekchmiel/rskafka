@@ -1,7 +1,7 @@
-use crate::proto::{KafkaWireFormatParse, ParseError};
+use crate::{wire_format::*, ParseError};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub struct ErrorCode(pub(crate) i16);
+pub struct ErrorCode(pub i16);
 
 impl std::fmt::Display for ErrorCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

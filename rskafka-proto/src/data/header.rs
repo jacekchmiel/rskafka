@@ -1,7 +1,5 @@
 use super::api_key::ApiKey;
-use crate::proto::{
-    data::primitive::NullableString, KafkaWireFormatParse, KafkaWireFormatWrite, ParseError,
-};
+use crate::{data::primitive::NullableString, wire_format::*, ParseError};
 use byteorder::{BigEndian, WriteBytesExt};
 use std::borrow::Cow;
 

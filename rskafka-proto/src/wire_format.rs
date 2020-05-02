@@ -1,12 +1,13 @@
-pub(crate) mod apis;
-pub(crate) mod data;
-
-use data::api_key::ApiKey;
-use nom::{error::ParseError as ParseErrorTrait, IResult};
-use thiserror::Error;
+use crate::{
+    data::header::{RequestHeader, ResponseHeader},
+    ApiKey, ParseError,
+};
+use log::{log_enabled, trace};
+use nom::IResult;
+use std::borrow::Cow;
 
 /// Object that can be written in Kafka Protocol wire format
-pub(crate) trait KafkaWireFormatWrite {
+pub trait KafkaWireFormatWrite {
     fn serialized_size(&self) -> usize;
     fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()>;
 
@@ -16,33 +17,68 @@ pub(crate) trait KafkaWireFormatWrite {
         let mut buffer = Vec::with_capacity(self.serialized_size());
         self.write_into(&mut buffer)
             .expect("write into buffer failed");
-
         buffer
     }
 }
 
-pub(crate) trait KafkaWireFormatStaticSize {
+pub trait KafkaWireFormatStaticSize {
     fn serialized_size_static() -> usize;
 }
 
 /// Represents a concrete request in Kafka Protocol wire format.
 /// Has specific Api Key, Api Version and can be written in wire format.
-pub(crate) trait KafkaRequest: KafkaWireFormatWrite {
+pub trait KafkaRequest: KafkaWireFormatWrite {
     const API_KEY: ApiKey;
     const API_VERSION: i16;
-    type Response: KafkaWireFormatParse;
+    type Response: KafkaResponse;
 
-    fn api_key(&self) -> ApiKey {
-        Self::API_KEY
+    fn write_bytes<W: std::io::Write>(
+        &self,
+        mut writer: W,
+        correlation_id: i32,
+        client_id: Option<&str>,
+    ) -> std::io::Result<usize> {
+        let header = RequestHeader {
+            request_api_key: Self::API_KEY,
+            request_api_version: Self::API_VERSION,
+            correlation_id,
+            client_id: client_id.map(Cow::Borrowed),
+        };
+        let size = header.serialized_size() + self.serialized_size();
+
+        trace!("write: size={:?}", size);
+        trace!("write: header={:?}", header);
+
+        if log_enabled!(log::Level::Trace) {
+            let mut buffer = Vec::with_capacity(size as usize + std::mem::size_of_val(&size));
+            (size as i32).write_into(&mut buffer)?; //TODO: conversion error
+            header.write_into(&mut buffer)?;
+            self.write_into(&mut buffer)?;
+            trace!("write: {:?}", buffer);
+
+            writer.write_all(&buffer)?;
+        } else {
+            (size as i32).write_into(&mut writer)?; //TODO: conversion error
+            header.write_into(&mut writer)?;
+            self.write_into(&mut writer)?;
+        }
+
+        writer.flush()?;
+
+        Ok(0)
     }
 
-    fn api_version(&self) -> i16 {
-        Self::API_VERSION
+    fn to_bytes(&self, correlation_id: i32, client_id: Option<&str>) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        self.write_bytes(&mut buffer, correlation_id, client_id)
+            .expect("write to vec failed");
+
+        buffer
     }
 }
 
 /// Object that can be parsed from Kafka Protocol wire data
-pub(crate) trait KafkaWireFormatParse: Sized {
+pub trait KafkaWireFormatParse: Sized {
     /// Parses bytes to create Self, borrowing data from buffer (lifetime of created object
     /// is bound to buffer lifetime). Follows nom protocol for easy parser combinations.
     fn parse_bytes(input: &[u8]) -> IResult<&[u8], Self, ParseError>;
@@ -67,49 +103,8 @@ pub(crate) trait KafkaWireFormatParse: Sized {
     }
 }
 
-#[derive(Debug, Error, PartialEq, Eq)]
-#[error("parse error")]
-pub enum ParseError {
-    #[error("too many bytes")]
-    TooMuchData(usize),
-    #[error("not enough bytes")]
-    Incomplete(nom::Needed),
-    #[error("{0:?}")]
-    Parse(Vec<nom::error::ErrorKind>),
-    #[error("{0:?}")]
-    Custom(&'static str),
-}
-
-impl<I> nom::error::ParseError<I> for ParseError {
-    fn from_error_kind(_input: I, kind: nom::error::ErrorKind) -> Self {
-        ParseError::Parse(vec![kind])
+pub trait KafkaResponse: KafkaWireFormatParse {
+    fn from_bytes(input: &[u8]) -> Result<Self, ParseError> {
+        Self::from_wire_bytes(input)
     }
-
-    fn append(_input: I, kind: nom::error::ErrorKind, other: Self) -> Self {
-        match other {
-            ParseError::Parse(trace) => {
-                ParseError::Parse(trace.into_iter().chain(std::iter::once(kind)).collect())
-            }
-            other => other,
-        }
-    }
-}
-
-impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for ParseError {
-    fn from(v: nom::Err<(&[u8], nom::error::ErrorKind)>) -> Self {
-        match v {
-            nom::Err::Incomplete(needed) => ParseError::Incomplete(needed),
-            nom::Err::Error((i, e)) | nom::Err::Failure((i, e)) => {
-                ParseError::from_error_kind(i, e)
-            }
-        }
-    }
-}
-
-fn custom_error(s: &'static str) -> nom::Err<ParseError> {
-    nom::Err::Error(ParseError::Custom(s))
-}
-
-fn custom_io_error<E: std::error::Error + Send + Sync + 'static>(e: E) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::InvalidData, e)
 }

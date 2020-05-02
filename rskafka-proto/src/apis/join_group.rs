@@ -1,6 +1,7 @@
-use crate::proto::{
+use crate::{
     data::{api_key::ApiKey, error::ErrorCode},
-    KafkaRequest, KafkaWireFormatParse, KafkaWireFormatWrite,
+    wire_format::*,
+    ParseError,
 };
 use std::borrow::Cow;
 
@@ -49,8 +50,10 @@ impl<'a> KafkaWireFormatWrite for JoinGroupRequestV4<'a> {
     }
 }
 
+impl KafkaResponse for JoinGroupResponseV4 {}
+
 impl KafkaWireFormatParse for JoinGroupResponseV4 {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, crate::proto::ParseError> {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         todo!()
     }
 }
