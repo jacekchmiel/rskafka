@@ -30,6 +30,7 @@ pub(crate) trait KafkaWireFormatStaticSize {
 pub(crate) trait KafkaRequest: KafkaWireFormatWrite {
     const API_KEY: ApiKey;
     const API_VERSION: i16;
+    type Response: KafkaWireFormatParse;
 
     fn api_key(&self) -> ApiKey {
         Self::API_KEY

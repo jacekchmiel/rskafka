@@ -126,6 +126,7 @@ impl KafkaWireFormatWrite for TopicConfig {
 impl KafkaRequest for CreateTopicsRequestV1 {
     const API_KEY: ApiKey = ApiKey::CreateTopics;
     const API_VERSION: i16 = 1;
+    type Response = CreateTopicsResponseV1;
 }
 
 impl KafkaWireFormatParse for CreateTopicsResponseV1 {

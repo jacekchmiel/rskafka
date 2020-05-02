@@ -36,6 +36,7 @@ impl KafkaWireFormatWrite for ApiVersionsV0Request {
 impl KafkaRequest for ApiVersionsV0Request {
     const API_KEY: ApiKey = ApiKey::ApiVersions;
     const API_VERSION: i16 = 0;
+    type Response = ApiVersionsV0Response;
 }
 
 struct UnknownApiKey(pub i16);

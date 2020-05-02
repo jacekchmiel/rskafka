@@ -1,17 +1,11 @@
-use crate::{
-    proto::{KafkaWireFormatParse, ParseError},
-    KafkaError,
-};
+use crate::proto::{KafkaWireFormatParse, ParseError};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct ErrorCode(pub(crate) i16);
 
-impl ErrorCode {
-    pub fn get_err(&self) -> Option<KafkaError> {
-        match self.0 {
-            0 => None,
-            code => Some(KafkaError(code)),
-        }
+impl std::fmt::Display for ErrorCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "error_code={}", self.0)
     }
 }
 

@@ -1,4 +1,4 @@
-use super::Error;
+use crate::Error;
 use std::time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

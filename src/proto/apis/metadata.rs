@@ -1,4 +1,4 @@
-use crate::proto::data::{api_key::ApiKey, error::ErrorCode, primitive::NullableString};
+use crate::proto::data::{api_key::ApiKey, error::ErrorCode, primitive::NullableString, BrokerId};
 use crate::proto::{custom_error, KafkaRequest, KafkaWireFormatParse, KafkaWireFormatWrite};
 use nom::sequence::tuple;
 use std::borrow::Cow;
@@ -18,27 +18,27 @@ pub struct MetadataResponseV2 {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrokerMetadata {
-    node_id: i32,
-    host: String,
-    port: u16,
-    rack: Option<String>,
+    pub node_id: BrokerId,
+    pub host: String,
+    pub port: u16,
+    pub rack: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TopicMetadata {
-    error: ErrorCode,
-    name: String,
-    is_internal: bool,
-    partitions: Vec<PartitionMetadata>,
+    pub error: ErrorCode,
+    pub name: String,
+    pub is_internal: bool,
+    pub partitions: Vec<PartitionMetadata>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PartitionMetadata {
-    error: ErrorCode,
-    partition_index: i32,
-    leader: i32,
-    replicas: Vec<i32>,
-    isr: Vec<i32>,
+    pub error: ErrorCode,
+    pub partition_index: i32,
+    pub leader: i32,
+    pub replicas: Vec<i32>,
+    pub isr: Vec<i32>,
 }
 
 impl KafkaWireFormatWrite for MetadataRequestV2 {
@@ -53,6 +53,7 @@ impl KafkaWireFormatWrite for MetadataRequestV2 {
 impl KafkaRequest for MetadataRequestV2 {
     const API_KEY: ApiKey = ApiKey::Metadata;
     const API_VERSION: i16 = 2;
+    type Response = MetadataResponseV2;
 }
 
 impl KafkaWireFormatParse for MetadataResponseV2 {
@@ -82,7 +83,7 @@ impl<'a> KafkaWireFormatParse for BrokerMetadata {
         let (input, rack) = NullableString::parse_bytes(input)?;
 
         let broker_metadata = BrokerMetadata {
-            node_id,
+            node_id: BrokerId(node_id),
             host,
             port: u16::try_from(port)
                 .map_err(|_| custom_error("received invalid broker port value"))?,

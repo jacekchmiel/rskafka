@@ -10,6 +10,8 @@ pub enum ApiKey {
     Produce = 0,
     Fetch = 1,
     Metadata = 3,
+    FindCoordinator = 10,
+    JoinGroup = 11,
     ApiVersions = 18,
     CreateTopics = 19,
 }
@@ -21,6 +23,8 @@ impl ApiKey {
             0 => Ok(Produce),
             1 => Ok(Fetch),
             3 => Ok(Metadata),
+            10 => Ok(FindCoordinator),
+            11 => Ok(JoinGroup),
             18 => Ok(ApiVersions),
             19 => Ok(CreateTopics),
             _ => Err(InvalidApiKey),

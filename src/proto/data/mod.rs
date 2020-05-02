@@ -3,11 +3,25 @@ pub mod error;
 pub mod header;
 pub mod primitive;
 
-use super::{KafkaRequest, KafkaWireFormatWrite};
+use super::{KafkaRequest, KafkaWireFormatParse, KafkaWireFormatWrite};
 use byteorder::{BigEndian, WriteBytesExt};
 use header::RequestHeader;
 use log::{log_enabled, trace};
 use std::borrow::Cow;
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub struct BrokerId(pub(crate) i32);
+
+impl KafkaWireFormatParse for BrokerId {
+    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, super::ParseError> {
+        nom::combinator::map(i32::parse_bytes, BrokerId)(input)
+    }
+}
+
+impl std::fmt::Display for BrokerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 pub(crate) fn write_request<W: std::io::Write, R: KafkaRequest>(
     mut writer: W,
