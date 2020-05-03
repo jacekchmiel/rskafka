@@ -91,7 +91,7 @@ impl ConsumerInternals {
     // }
 
     fn spawn(cluster: Arc<AsyncClusterClient>, config: ConsumerConfig) -> Consumer {
-        let (mut sender, receiver) = mpsc::channel(1);
+        let (sender, receiver) = mpsc::channel(1);
         let shutdown = Arc::new(Notify::new());
 
         let internals = ConsumerInternals { cluster, config };

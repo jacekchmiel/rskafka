@@ -8,10 +8,16 @@ use nom::combinator::map;
 use nom::number::complete::be_i16;
 use nom::sequence::tuple;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, KafkaWireFormatWrite)]
 pub struct ApiVersionsRequestV0;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+impl KafkaRequest for ApiVersionsRequestV0 {
+    const API_KEY: ApiKey = ApiKey::ApiVersions;
+    const API_VERSION: i16 = 0;
+    type Response = ApiVersionsResponseV0;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, KafkaResponse)]
 pub struct ApiVersionsResponseV0 {
     pub error_code: ErrorCode,
     pub api_keys: Vec<ApiVersionsRange>,
@@ -22,22 +28,6 @@ pub struct ApiVersionsRange {
     pub api_key: ApiKey,
     pub min_version: i16,
     pub max_version: i16,
-}
-
-impl KafkaWireFormatWrite for ApiVersionsRequestV0 {
-    fn serialized_size(&self) -> usize {
-        0
-    }
-
-    fn write_into<W: std::io::Write>(&self, _writer: &mut W) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
-impl KafkaRequest for ApiVersionsRequestV0 {
-    const API_KEY: ApiKey = ApiKey::ApiVersions;
-    const API_VERSION: i16 = 0;
-    type Response = ApiVersionsResponseV0;
 }
 
 struct UnknownApiKey(pub i16);
@@ -58,18 +48,6 @@ impl KafkaWireFormatParse for ApiVersionsResponseV0 {
                 api_keys,
             },
         )(input)
-    }
-}
-
-impl KafkaResponse for ApiVersionsResponseV0 {}
-
-impl ApiVersionsRange {
-    pub fn from_tuple((api_key, min_version, max_version): (ApiKey, i16, i16)) -> Self {
-        ApiVersionsRange {
-            api_key,
-            min_version,
-            max_version,
-        }
     }
 }
 

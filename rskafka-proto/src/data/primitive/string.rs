@@ -31,7 +31,7 @@ impl<'a> KafkaWireFormatWrite for &str {
     }
 }
 
-impl<'a> KafkaWireFormatWrite for String {
+impl KafkaWireFormatWrite for String {
     fn serialized_size(&self) -> usize {
         self.as_str().serialized_size()
     }
@@ -40,7 +40,16 @@ impl<'a> KafkaWireFormatWrite for String {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+impl<'a> KafkaWireFormatWrite for Cow<'a, str> {
+    fn serialized_size(&self) -> usize {
+        self.as_ref().serialized_size()
+    }
+    fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        self.as_ref().write_into(writer)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NullableString<'a>(pub Option<Cow<'a, str>>);
 
 impl<'a> NullableString<'a> {
@@ -124,20 +133,6 @@ impl KafkaWireFormatParse for NullableString<'static> {
 }
 
 pub struct CompactNullableString<'a>(pub Option<Cow<'a, str>>);
-
-impl<'a> CompactNullableString<'a> {
-    pub fn owned(s: String) -> Self {
-        CompactNullableString(Some(Cow::Owned(s)))
-    }
-
-    pub fn borrowed(s: &'a str) -> Self {
-        CompactNullableString(Some(Cow::Borrowed(s)))
-    }
-
-    pub fn null() -> Self {
-        CompactNullableString(None)
-    }
-}
 
 impl KafkaWireFormatParse for CompactNullableString<'static> {
     fn parse_bytes(_input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {

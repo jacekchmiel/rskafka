@@ -1,10 +1,9 @@
 use crate::{
     data::{api_key::ApiKey, error::ErrorCode, primitive::NullableString},
     wire_format::*,
-    ParseError,
 };
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, KafkaWireFormatWrite)]
 pub struct CreateTopic {
     pub name: String,
     pub partitions: i32,
@@ -13,16 +12,16 @@ pub struct CreateTopic {
     pub configs: Vec<TopicConfig>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, KafkaWireFormatWrite)]
 pub struct TopicAssignment {
     partition: i32,
     broker_ids: Vec<i32>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, KafkaWireFormatWrite)]
 pub struct TopicConfig {
     name: String,
-    value: Option<String>,
+    value: NullableString<'static>,
 }
 
 impl CreateTopic {
@@ -52,109 +51,27 @@ impl CreateTopic {
     //TODO: configs
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, KafkaWireFormatWrite)]
 pub struct CreateTopicsRequestV1 {
     pub topics: Vec<CreateTopic>,
     pub timeout_ms: i32,
     pub validate_only: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, KafkaWireFormatParse, KafkaResponse)]
 pub struct CreateTopicsResponseV1 {
     pub topics: Vec<CreateTopicResponse>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, KafkaWireFormatParse)]
 pub struct CreateTopicResponse {
     pub name: String,
     pub error_code: ErrorCode,
-    pub error_message: Option<String>,
-}
-
-impl KafkaWireFormatWrite for CreateTopicsRequestV1 {
-    fn serialized_size(&self) -> usize {
-        self.topics.serialized_size()
-            + self.timeout_ms.serialized_size()
-            + self.validate_only.serialized_size()
-    }
-    fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        self.topics.write_into(writer)?;
-        self.timeout_ms.write_into(writer)?;
-        self.validate_only.write_into(writer)
-    }
-}
-
-impl KafkaWireFormatWrite for CreateTopic {
-    fn serialized_size(&self) -> usize {
-        self.name.serialized_size()
-            + self.partitions.serialized_size()
-            + self.replication_factor.serialized_size()
-            + self.assignments.serialized_size()
-            + self.configs.serialized_size()
-    }
-
-    fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        self.name.write_into(writer)?;
-        self.partitions.write_into(writer)?;
-        self.replication_factor.write_into(writer)?;
-        self.assignments.write_into(writer)?;
-        self.configs.write_into(writer)
-    }
-}
-
-impl KafkaWireFormatWrite for TopicAssignment {
-    fn serialized_size(&self) -> usize {
-        self.partition.serialized_size() + self.broker_ids.serialized_size()
-    }
-
-    fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        self.partition.write_into(writer)?;
-        self.broker_ids.write_into(writer)
-    }
-}
-
-impl KafkaWireFormatWrite for TopicConfig {
-    fn serialized_size(&self) -> usize {
-        self.name.serialized_size() + NullableString::from(&self.value).serialized_size()
-    }
-
-    fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        self.name.write_into(writer)?;
-        NullableString::from(&self.value).write_into(writer)
-    }
+    pub error_message: NullableString<'static>,
 }
 
 impl KafkaRequest for CreateTopicsRequestV1 {
     const API_KEY: ApiKey = ApiKey::CreateTopics;
     const API_VERSION: i16 = 1;
     type Response = CreateTopicsResponseV1;
-}
-
-impl KafkaResponse for CreateTopicsResponseV1 {}
-
-impl KafkaWireFormatParse for CreateTopicsResponseV1 {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        let (input, topics) = KafkaWireFormatParse::parse_bytes(input)?;
-
-        Ok((input, CreateTopicsResponseV1 { topics }))
-    }
-}
-
-impl KafkaWireFormatParse for CreateTopicResponse {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        use nom::sequence::tuple;
-        let (input, fields) = tuple((
-            String::parse_bytes,
-            ErrorCode::parse_bytes,
-            NullableString::parse_bytes,
-        ))(input)?;
-
-        let response = CreateTopicResponse {
-            name: fields.0,
-            error_code: fields.1,
-            error_message: fields.2.into_owned_option(),
-        };
-
-        Ok((input, response))
-    }
 }

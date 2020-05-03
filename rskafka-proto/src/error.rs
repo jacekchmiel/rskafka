@@ -1,4 +1,5 @@
 use nom::error::ParseError as ParseErrorTrait;
+use std::borrow::Cow;
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -11,7 +12,7 @@ pub enum ParseError {
     #[error("{0:?}")]
     Parse(Vec<nom::error::ErrorKind>),
     #[error("{0:?}")]
-    Custom(&'static str),
+    Custom(Cow<'static, str>),
 }
 
 impl<I> nom::error::ParseError<I> for ParseError {
@@ -41,7 +42,7 @@ impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for ParseError {
 }
 
 pub(crate) fn custom_error(s: &'static str) -> nom::Err<ParseError> {
-    nom::Err::Error(ParseError::Custom(s))
+    nom::Err::Error(ParseError::Custom(s.into()))
 }
 
 pub(crate) fn custom_io_error<E: std::error::Error + Send + Sync + 'static>(

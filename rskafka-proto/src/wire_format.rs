@@ -1,7 +1,4 @@
-use crate::{
-    data::header::{RequestHeader, ResponseHeader},
-    ApiKey, ParseError,
-};
+use crate::{data::header::RequestHeader, ApiKey, ParseError};
 use log::{log_enabled, trace};
 use nom::IResult;
 use std::borrow::Cow;

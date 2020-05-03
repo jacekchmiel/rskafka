@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate rskafka_proto_derive;
+
 pub mod apis;
 mod data;
 mod error;

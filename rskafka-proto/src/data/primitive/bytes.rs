@@ -1,5 +1,9 @@
 use super::int::VarInt;
-use crate::{error::custom_error, wire_format::*, ParseError};
+use crate::{
+    error::{custom_error, custom_io_error},
+    wire_format::*,
+    ParseError,
+};
 use nom::bytes::complete::take;
 use nom::combinator::map;
 use std::convert::TryFrom;
@@ -9,6 +13,18 @@ impl KafkaWireFormatParse for Vec<u8> {
         let (input, ssize) = i32::parse_bytes(input)?;
         let size = usize::try_from(ssize).map_err(|_| custom_error("negative size"))?;
         map(take(size), |bytes: &[u8]| Vec::from(bytes))(input)
+    }
+}
+
+impl KafkaWireFormatWrite for [u8] {
+    fn serialized_size(&self) -> usize {
+        i32::serialized_size_static() + self.len()
+    }
+
+    fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        let size = i32::try_from(self.len()).map_err(|e| custom_io_error(e))?;
+        size.write_into(writer)?;
+        writer.write_all(self)
     }
 }
 

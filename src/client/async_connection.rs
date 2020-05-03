@@ -47,7 +47,7 @@ impl BrokerConnection {
             &mut request_buffer,
             self.last_correlation_id,
             Some(&self.client_id),
-        );
+        )?;
 
         self.stream.write_all(&request_buffer).await?;
         let response_bytes = self.read_response(self.last_correlation_id).await?;

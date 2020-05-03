@@ -1,52 +1,9 @@
 use crate::data::{api_key::ApiKey, error::ErrorCode, primitive::NullableString, BrokerId};
-use crate::{error::custom_error, wire_format::*, ParseError};
-use std::convert::TryFrom;
+use crate::wire_format::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, KafkaWireFormatWrite)]
 pub struct MetadataRequestV2 {
     pub topics: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MetadataResponseV2 {
-    pub brokers: Vec<BrokerMetadata>,
-    pub cluster_id: Option<String>,
-    pub controller_id: i32,
-    pub topics: Vec<TopicMetadata>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BrokerMetadata {
-    pub node_id: BrokerId,
-    pub host: String,
-    pub port: u16,
-    pub rack: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TopicMetadata {
-    pub error: ErrorCode,
-    pub name: String,
-    pub is_internal: bool,
-    pub partitions: Vec<PartitionMetadata>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PartitionMetadata {
-    pub error: ErrorCode,
-    pub partition_index: i32,
-    pub leader: BrokerId,
-    pub replicas: Vec<i32>,
-    pub isr: Vec<i32>,
-}
-
-impl KafkaWireFormatWrite for MetadataRequestV2 {
-    fn serialized_size(&self) -> usize {
-        self.topics.serialized_size()
-    }
-    fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        self.topics.write_into(writer)
-    }
 }
 
 impl KafkaRequest for MetadataRequestV2 {
@@ -55,81 +12,38 @@ impl KafkaRequest for MetadataRequestV2 {
     type Response = MetadataResponseV2;
 }
 
-impl KafkaWireFormatParse for MetadataResponseV2 {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        let (input, brokers) = Vec::<BrokerMetadata>::parse_bytes(input)?;
-        let (input, cluster_id) = NullableString::parse_bytes(input)?;
-        let (input, controller_id) = i32::parse_bytes(input)?;
-        let (input, topics) = Vec::<TopicMetadata>::parse_bytes(input)?;
-
-        let metadata_response = MetadataResponseV2 {
-            brokers,
-            cluster_id: cluster_id.0.map(|s| s.to_string()),
-            controller_id,
-            topics,
-        };
-
-        Ok((input, metadata_response))
-    }
+#[derive(Debug, Clone, PartialEq, Eq, KafkaWireFormatParse, KafkaResponse)]
+pub struct MetadataResponseV2 {
+    pub brokers: Vec<BrokerMetadata>,
+    pub cluster_id: NullableString<'static>,
+    pub controller_id: i32,
+    pub topics: Vec<TopicMetadata>,
 }
 
-impl KafkaResponse for MetadataResponseV2 {}
-
-impl<'a> KafkaWireFormatParse for BrokerMetadata {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        let (input, node_id) = i32::parse_bytes(input)?;
-        let (input, host) = String::parse_bytes(input)?;
-        let (input, port) = i32::parse_bytes(input)?;
-        let (input, rack) = NullableString::parse_bytes(input)?;
-
-        let broker_metadata = BrokerMetadata {
-            node_id: BrokerId(node_id),
-            host,
-            port: u16::try_from(port)
-                .map_err(|_| custom_error("received invalid broker port value"))?,
-            rack: rack.0.map(|r| r.to_string()),
-        };
-
-        Ok((input, broker_metadata))
-    }
+#[derive(Debug, Clone, PartialEq, Eq, KafkaWireFormatParse)]
+pub struct BrokerMetadata {
+    pub node_id: BrokerId,
+    pub host: String,
+    #[kafka_proto(wire_type = "i32")]
+    pub port: u16,
+    pub rack: NullableString<'static>,
 }
 
-impl<'a> KafkaWireFormatParse for TopicMetadata {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        let (input, error) = ErrorCode::parse_bytes(input)?;
-        let (input, name) = String::parse_bytes(input)?;
-        let (input, is_internal) = bool::parse_bytes(input)?;
-        let (input, partitions) = Vec::<PartitionMetadata>::parse_bytes(input)?;
-
-        let topic_metadata = TopicMetadata {
-            error,
-            name: name.to_string(),
-            is_internal,
-            partitions,
-        };
-
-        Ok((input, topic_metadata))
-    }
+#[derive(Debug, Clone, PartialEq, Eq, KafkaWireFormatParse)]
+pub struct TopicMetadata {
+    pub error: ErrorCode,
+    pub name: String,
+    pub is_internal: bool,
+    pub partitions: Vec<PartitionMetadata>,
 }
 
-impl<'a> KafkaWireFormatParse for PartitionMetadata {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        let (input, error) = ErrorCode::parse_bytes(input)?;
-        let (input, partition_index) = i32::parse_bytes(input)?;
-        let (input, leader) = i32::parse_bytes(input)?;
-        let (input, replicas) = Vec::<i32>::parse_bytes(input)?;
-        let (input, isr) = Vec::<i32>::parse_bytes(input)?;
-
-        let partition_metadata = PartitionMetadata {
-            error,
-            partition_index,
-            leader: BrokerId(leader),
-            replicas,
-            isr,
-        };
-
-        Ok((input, partition_metadata))
-    }
+#[derive(Debug, Clone, PartialEq, Eq, KafkaWireFormatParse)]
+pub struct PartitionMetadata {
+    pub error: ErrorCode,
+    pub partition_index: i32,
+    pub leader: BrokerId,
+    pub replicas: Vec<i32>,
+    pub isr: Vec<i32>,
 }
 
 #[cfg(test)]

@@ -5,6 +5,7 @@ authors = ["Jacek Chmiel <jacek@chmiel.cc>"]
 edition = "2018"
 
 [dependencies]
+rskafka-proto-derive = { path = "../rskafka-proto-derive" }
 log = "0.4.8"
 nom = "5.1.1"
 uuid = "0.8.1"

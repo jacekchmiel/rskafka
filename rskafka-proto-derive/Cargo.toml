@@ -1,0 +1,15 @@
+[package]
+name = "rskafka-proto-derive"
+version = "0.1.0"
+authors = ["Jacek Chmiel <jacek@chmiel.cc>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1.0"
+quote = "1.0"
+proc-macro2 = "1.0"
+proc-macro-error = "0.4"
+synstructure = "0.12.3"
