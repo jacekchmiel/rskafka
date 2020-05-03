@@ -1,7 +1,7 @@
 use crate::data::{api_key::ApiKey, error::ErrorCode, primitive::NullableString, BrokerId};
 use crate::wire_format::*;
 
-#[derive(Debug, Clone, PartialEq, Eq, KafkaWireFormatWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, WireFormatWrite)]
 pub struct MetadataRequestV2 {
     pub topics: Vec<String>,
 }
@@ -12,7 +12,7 @@ impl KafkaRequest for MetadataRequestV2 {
     type Response = MetadataResponseV2;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, KafkaWireFormatParse, KafkaResponse)]
+#[derive(Debug, Clone, PartialEq, Eq, WireFormatParse, KafkaResponse)]
 pub struct MetadataResponseV2 {
     pub brokers: Vec<BrokerMetadata>,
     pub cluster_id: NullableString<'static>,
@@ -20,7 +20,7 @@ pub struct MetadataResponseV2 {
     pub topics: Vec<TopicMetadata>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, KafkaWireFormatParse)]
+#[derive(Debug, Clone, PartialEq, Eq, WireFormatParse)]
 pub struct BrokerMetadata {
     pub node_id: BrokerId,
     pub host: String,
@@ -29,7 +29,7 @@ pub struct BrokerMetadata {
     pub rack: NullableString<'static>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, KafkaWireFormatParse)]
+#[derive(Debug, Clone, PartialEq, Eq, WireFormatParse)]
 pub struct TopicMetadata {
     pub error: ErrorCode,
     pub name: String,
@@ -37,7 +37,7 @@ pub struct TopicMetadata {
     pub partitions: Vec<PartitionMetadata>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, KafkaWireFormatParse)]
+#[derive(Debug, Clone, PartialEq, Eq, WireFormatParse)]
 pub struct PartitionMetadata {
     pub error: ErrorCode,
     pub partition_index: i32,

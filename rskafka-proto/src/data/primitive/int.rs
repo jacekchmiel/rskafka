@@ -2,15 +2,15 @@ use crate::{wire_format::*, ParseError};
 use byteorder::{BigEndian, WriteBytesExt};
 use std::io::Write;
 
-impl KafkaWireFormatParse for i8 {
+impl WireFormatParse for i8 {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         nom::number::complete::be_i8(input)
     }
 }
 
-impl KafkaWireFormatWrite for i8 {
-    fn serialized_size(&self) -> usize {
-        Self::serialized_size_static()
+impl WireFormatWrite for i8 {
+    fn wire_size(&self) -> usize {
+        Self::wire_size_static()
     }
 
     fn write_into<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -18,21 +18,21 @@ impl KafkaWireFormatWrite for i8 {
     }
 }
 
-impl KafkaWireFormatStaticSize for i8 {
-    fn serialized_size_static() -> usize {
+impl WireFormatSizeStatic for i8 {
+    fn wire_size_static() -> usize {
         std::mem::size_of::<Self>()
     }
 }
 
-impl KafkaWireFormatParse for i16 {
+impl WireFormatParse for i16 {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         nom::number::complete::be_i16(input)
     }
 }
 
-impl KafkaWireFormatWrite for i16 {
-    fn serialized_size(&self) -> usize {
-        Self::serialized_size_static()
+impl WireFormatWrite for i16 {
+    fn wire_size(&self) -> usize {
+        Self::wire_size_static()
     }
 
     fn write_into<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -40,21 +40,21 @@ impl KafkaWireFormatWrite for i16 {
     }
 }
 
-impl KafkaWireFormatStaticSize for i16 {
-    fn serialized_size_static() -> usize {
+impl WireFormatSizeStatic for i16 {
+    fn wire_size_static() -> usize {
         std::mem::size_of::<Self>()
     }
 }
 
-impl<'a> KafkaWireFormatParse for i32 {
+impl<'a> WireFormatParse for i32 {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         nom::number::complete::be_i32(input)
     }
 }
 
-impl KafkaWireFormatWrite for i32 {
-    fn serialized_size(&self) -> usize {
-        Self::serialized_size_static()
+impl WireFormatWrite for i32 {
+    fn wire_size(&self) -> usize {
+        Self::wire_size_static()
     }
 
     fn write_into<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -62,21 +62,21 @@ impl KafkaWireFormatWrite for i32 {
     }
 }
 
-impl KafkaWireFormatStaticSize for i32 {
-    fn serialized_size_static() -> usize {
+impl WireFormatSizeStatic for i32 {
+    fn wire_size_static() -> usize {
         std::mem::size_of::<Self>()
     }
 }
 
-impl<'a> KafkaWireFormatParse for i64 {
+impl<'a> WireFormatParse for i64 {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         nom::number::complete::be_i64(input)
     }
 }
 
-impl KafkaWireFormatWrite for i64 {
-    fn serialized_size(&self) -> usize {
-        Self::serialized_size_static()
+impl WireFormatWrite for i64 {
+    fn wire_size(&self) -> usize {
+        Self::wire_size_static()
     }
 
     fn write_into<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -84,21 +84,21 @@ impl KafkaWireFormatWrite for i64 {
     }
 }
 
-impl KafkaWireFormatStaticSize for i64 {
-    fn serialized_size_static() -> usize {
+impl WireFormatSizeStatic for i64 {
+    fn wire_size_static() -> usize {
         std::mem::size_of::<Self>()
     }
 }
 
-impl KafkaWireFormatParse for u32 {
+impl WireFormatParse for u32 {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         nom::number::complete::be_u32(input)
     }
 }
 
-impl KafkaWireFormatWrite for u32 {
-    fn serialized_size(&self) -> usize {
-        Self::serialized_size_static()
+impl WireFormatWrite for u32 {
+    fn wire_size(&self) -> usize {
+        Self::wire_size_static()
     }
 
     fn write_into<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -106,15 +106,15 @@ impl KafkaWireFormatWrite for u32 {
     }
 }
 
-impl KafkaWireFormatStaticSize for u32 {
-    fn serialized_size_static() -> usize {
+impl WireFormatSizeStatic for u32 {
+    fn wire_size_static() -> usize {
         std::mem::size_of::<Self>()
     }
 }
 
 pub struct VarInt(pub i32);
 
-impl KafkaWireFormatParse for VarInt {
+impl WireFormatParse for VarInt {
     fn parse_bytes(_input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         todo!()
     }

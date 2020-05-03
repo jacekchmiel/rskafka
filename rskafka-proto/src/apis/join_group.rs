@@ -4,7 +4,7 @@ use crate::{
 };
 use std::borrow::Cow;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, KafkaWireFormatWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, WireFormatWrite)]
 pub struct JoinGroupRequestV4<'a> {
     pub group_id: Cow<'a, str>,
     pub session_timeout_ms: i32,
@@ -20,13 +20,13 @@ impl<'a> KafkaRequest for JoinGroupRequestV4<'a> {
     type Response = JoinGroupResponseV4;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, KafkaWireFormatWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, WireFormatWrite)]
 pub struct Protocol<'a> {
     pub name: Cow<'a, str>,
     pub metadata: Cow<'a, [u8]>,
 }
 
-#[derive(Debug, Clone, PartialEq, KafkaWireFormatParse, KafkaResponse)]
+#[derive(Debug, Clone, PartialEq, WireFormatParse, KafkaResponse)]
 pub struct JoinGroupResponseV4 {
     pub throttle_time_ms: i32,
     pub error_code: ErrorCode,
@@ -37,7 +37,7 @@ pub struct JoinGroupResponseV4 {
     pub members: Vec<GroupMember>,
 }
 
-#[derive(Debug, Clone, PartialEq, KafkaWireFormatParse)]
+#[derive(Debug, Clone, PartialEq, WireFormatParse)]
 pub struct GroupMember {
     pub member_id: String,
     pub metadata: Vec<u8>,

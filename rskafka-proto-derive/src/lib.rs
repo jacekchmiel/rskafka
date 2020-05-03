@@ -11,13 +11,13 @@ use proc_macro_error::proc_macro_error;
 use syn::export::ToTokens;
 
 fn wire_format_write_derive(s: synstructure::Structure) -> TokenStream {
-    let serialized_size = s.fold(quote!(0), |acc, bi| quote!(#acc + #bi.serialized_size()));
+    let wire_size = s.fold(quote!(0), |acc, bi| quote!(#acc + #bi.wire_size()));
     let write_into = s.each(|bi| quote!( #bi.write_into(writer)?; ));
 
     s.gen_impl(quote! {
-        gen impl crate::wire_format::KafkaWireFormatWrite for @Self {
-            fn serialized_size(&self) -> usize {
-                match self { #serialized_size }
+        gen impl crate::wire_format::WireFormatWrite for @Self {
+            fn wire_size(&self) -> usize {
+                match self { #wire_size }
             }
 
             fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -27,7 +27,7 @@ fn wire_format_write_derive(s: synstructure::Structure) -> TokenStream {
         }
     })
 }
-decl_derive!([KafkaWireFormatWrite, attributes(kafka_proto)] => #[proc_macro_error] wire_format_write_derive);
+decl_derive!([WireFormatWrite, attributes(kafka_proto)] => #[proc_macro_error] wire_format_write_derive);
 
 fn kafka_response_derive(s: synstructure::Structure) -> TokenStream {
     s.gen_impl(quote! {
@@ -48,7 +48,7 @@ fn wire_format_parse_derive(s: synstructure::Structure) -> TokenStream {
         let name = field.ident.as_ref().unwrap();
         let custom_wire_type = find_wire_type_attr(&field.attrs);
         match custom_wire_type {
-            None => quote!(let (input, #name) = KafkaWireFormatParse::parse_bytes(input)?;),
+            None => quote!(let (input, #name) = WireFormatParse::parse_bytes(input)?;),
             Some(wire_type) => {
                 let err_message = LitStr::new(&format!("invalid {} value", name), Span::call_site());
                 quote! {
@@ -68,7 +68,7 @@ fn wire_format_parse_derive(s: synstructure::Structure) -> TokenStream {
         extern crate std;
         use std::convert::TryInto as TryInto__RskafkaProtoDerive;
 
-        gen impl crate::wire_format::KafkaWireFormatParse for @Self {
+        gen impl crate::wire_format::WireFormatParse for @Self {
             fn parse_bytes(input: &[u8]) -> ::nom::IResult<&[u8], Self, crate::error::ParseError> {
                 #(#parse)*
                 Ok((input, #construct))
@@ -76,7 +76,7 @@ fn wire_format_parse_derive(s: synstructure::Structure) -> TokenStream {
         }
     })
 }
-decl_derive!([KafkaWireFormatParse, attributes(kafka_proto)] => #[proc_macro_error] wire_format_parse_derive);
+decl_derive!([WireFormatParse, attributes(kafka_proto)] => #[proc_macro_error] wire_format_parse_derive);
 
 fn find_wire_type_attr(attributes: &[Attribute]) -> Option<Path> {
     let arg: ExprAssign = attributes

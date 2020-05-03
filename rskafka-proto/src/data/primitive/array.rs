@@ -1,7 +1,4 @@
-use crate::{
-    wire_format::{KafkaWireFormatParse, KafkaWireFormatWrite},
-    ParseError,
-};
+use crate::{wire_format::*, ParseError};
 use nom::{
     combinator::{flat_map, map_res},
     multi::many_m_n,
@@ -11,9 +8,9 @@ use std::{
     convert::{TryFrom, TryInto},
 };
 
-impl<T> KafkaWireFormatParse for Vec<T>
+impl<T> WireFormatParse for Vec<T>
 where
-    T: KafkaWireFormatParse,
+    T: WireFormatParse,
 {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         flat_map(map_res(i32::parse_bytes, try_into_usize), |cnt| {
@@ -27,14 +24,14 @@ fn try_into_usize<T: TryInto<usize>>(v: T) -> Result<usize, ParseError> {
         .map_err(|_| ParseError::Custom("negative array size".into()))
 }
 
-impl<T> KafkaWireFormatWrite for [T]
+impl<T> WireFormatWrite for [T]
 where
-    T: KafkaWireFormatWrite,
+    T: WireFormatWrite,
 {
-    fn serialized_size(&self) -> usize {
+    fn wire_size(&self) -> usize {
         let len = self.as_ref().len();
-        let len_size = (len as i32).serialized_size();
-        let fields_size: usize = len * self.iter().map(|v| v.serialized_size()).sum::<usize>();
+        let len_size = (len as i32).wire_size();
+        let fields_size: usize = len * self.iter().map(|v| v.wire_size()).sum::<usize>();
         len_size + fields_size
     }
 
@@ -51,12 +48,12 @@ where
     }
 }
 
-impl<'a, T> KafkaWireFormatWrite for Cow<'a, [T]>
+impl<'a, T> WireFormatWrite for Cow<'a, [T]>
 where
-    T: KafkaWireFormatWrite + Clone,
+    T: WireFormatWrite + Clone,
 {
-    fn serialized_size(&self) -> usize {
-        self.as_ref().serialized_size()
+    fn wire_size(&self) -> usize {
+        self.as_ref().wire_size()
     }
 
     fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -64,12 +61,12 @@ where
     }
 }
 
-impl<T> KafkaWireFormatWrite for Vec<T>
+impl<T> WireFormatWrite for Vec<T>
 where
-    T: KafkaWireFormatWrite,
+    T: WireFormatWrite,
 {
-    fn serialized_size(&self) -> usize {
-        self.as_slice().serialized_size()
+    fn wire_size(&self) -> usize {
+        self.as_slice().wire_size()
     }
 
     fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {

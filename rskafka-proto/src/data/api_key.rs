@@ -34,10 +34,6 @@ impl ApiKey {
     pub fn to_i16(&self) -> i16 {
         *self as i16
     }
-
-    pub(crate) fn serialized_size(&self) -> usize {
-        std::mem::size_of_val(&self.to_i16())
-    }
 }
 
 impl Into<i16> for ApiKey {
@@ -46,12 +42,28 @@ impl Into<i16> for ApiKey {
     }
 }
 
-impl<'a> KafkaWireFormatParse for ApiKey {
+impl WireFormatParse for ApiKey {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         use nom::combinator::map_res;
         use nom::number::complete::be_i16;
 
         map_res(be_i16, ApiKey::try_from_i16)(input)
+    }
+}
+
+impl WireFormatSizeStatic for ApiKey {
+    fn wire_size_static() -> usize {
+        i16::wire_size_static()
+    }
+}
+
+impl WireFormatWrite for ApiKey {
+    fn wire_size(&self) -> usize {
+        Self::wire_size_static()
+    }
+
+    fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        self.to_i16().write_into(writer)
     }
 }
 

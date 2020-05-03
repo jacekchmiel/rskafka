@@ -8,7 +8,7 @@ use nom::combinator::map;
 use nom::number::complete::be_i16;
 use nom::sequence::tuple;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, KafkaWireFormatWrite)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, WireFormatWrite)]
 pub struct ApiVersionsRequestV0;
 
 impl KafkaRequest for ApiVersionsRequestV0 {
@@ -39,7 +39,7 @@ fn api_versions_filtered(input: &[u8]) -> nom::IResult<&[u8], Vec<ApiVersionsRan
     )(input)
 }
 
-impl KafkaWireFormatParse for ApiVersionsResponseV0 {
+impl WireFormatParse for ApiVersionsResponseV0 {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         map(
             tuple((ErrorCode::parse_bytes, api_versions_filtered)),
@@ -51,7 +51,7 @@ impl KafkaWireFormatParse for ApiVersionsResponseV0 {
     }
 }
 
-impl KafkaWireFormatParse for Either<ApiVersionsRange, UnknownApiKey> {
+impl WireFormatParse for Either<ApiVersionsRange, UnknownApiKey> {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         map(
             tuple((be_i16, be_i16, be_i16)),

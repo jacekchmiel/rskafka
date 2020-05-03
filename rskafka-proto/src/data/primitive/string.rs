@@ -8,7 +8,7 @@ use nom::bytes::complete::take;
 use std::borrow::Cow;
 use std::convert::TryFrom;
 
-impl KafkaWireFormatParse for String {
+impl WireFormatParse for String {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, size) = i16::parse_bytes(input)?;
         let size = usize::try_from(size).map_err(|_| custom_error("negative size"))?;
@@ -20,9 +20,9 @@ impl KafkaWireFormatParse for String {
     }
 }
 
-impl<'a> KafkaWireFormatWrite for &str {
-    fn serialized_size(&self) -> usize {
-        i16::serialized_size_static() + self.len()
+impl<'a> WireFormatWrite for &str {
+    fn wire_size(&self) -> usize {
+        i16::wire_size_static() + self.len()
     }
     fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         let size = i16::try_from(self.len()).map_err(|e| custom_io_error(e))?;
@@ -31,18 +31,18 @@ impl<'a> KafkaWireFormatWrite for &str {
     }
 }
 
-impl KafkaWireFormatWrite for String {
-    fn serialized_size(&self) -> usize {
-        self.as_str().serialized_size()
+impl WireFormatWrite for String {
+    fn wire_size(&self) -> usize {
+        self.as_str().wire_size()
     }
     fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         self.as_str().write_into(writer)
     }
 }
 
-impl<'a> KafkaWireFormatWrite for Cow<'a, str> {
-    fn serialized_size(&self) -> usize {
-        self.as_ref().serialized_size()
+impl<'a> WireFormatWrite for Cow<'a, str> {
+    fn wire_size(&self) -> usize {
+        self.as_ref().wire_size()
     }
     fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         self.as_ref().write_into(writer)
@@ -70,6 +70,12 @@ impl<'a> NullableString<'a> {
     }
 }
 
+impl NullableString<'static> {
+    pub fn with_owned(s: String) -> Self {
+        NullableString(Some(Cow::Owned(s)))
+    }
+}
+
 impl<'a> From<Option<&'a str>> for NullableString<'a> {
     fn from(v: Option<&'a str>) -> Self {
         match v {
@@ -88,14 +94,14 @@ impl<'a> From<&'a Option<String>> for NullableString<'a> {
     }
 }
 
-impl NullableString<'static> {
-    pub fn with_owned(s: String) -> Self {
-        NullableString(Some(Cow::Owned(s)))
+impl<'a> From<&'a str> for NullableString<'a> {
+    fn from(v: &'a str) -> Self {
+        Self::with_borrowed(v)
     }
 }
 
-impl<'a> KafkaWireFormatWrite for NullableString<'a> {
-    fn serialized_size(&self) -> usize {
+impl<'a> WireFormatWrite for NullableString<'a> {
+    fn wire_size(&self) -> usize {
         let size_size = std::mem::size_of::<i16>();
         let content_size = match self.0.as_ref() {
             None => 0,
@@ -116,7 +122,7 @@ impl<'a> KafkaWireFormatWrite for NullableString<'a> {
     }
 }
 
-impl KafkaWireFormatParse for NullableString<'static> {
+impl WireFormatParse for NullableString<'static> {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, ssize) = i16::parse_bytes(input)?;
         match ssize {
@@ -134,7 +140,7 @@ impl KafkaWireFormatParse for NullableString<'static> {
 
 pub struct CompactNullableString<'a>(pub Option<Cow<'a, str>>);
 
-impl KafkaWireFormatParse for CompactNullableString<'static> {
+impl WireFormatParse for CompactNullableString<'static> {
     fn parse_bytes(_input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         // map(compact_nullable_bytes, |v| v.map(try_into_utf8))(input)
         todo!()
@@ -176,7 +182,7 @@ mod test {
     #[test]
     fn nullable_string_to_wire_format() {
         let string = NullableString::with_borrowed("rskafka");
-        assert_eq!(string.serialized_size(), 9);
+        assert_eq!(string.wire_size(), 9);
 
         let bytes = string.to_wire_bytes();
         let expected = vec![0x00, 0x07, 0x72, 0x73, 0x6b, 0x61, 0x66, 0x6b, 0x61];
@@ -186,7 +192,7 @@ mod test {
     #[test]
     fn nullable_string_to_wire_format_null() {
         let string = NullableString::with_null();
-        assert_eq!(string.serialized_size(), 2);
+        assert_eq!(string.wire_size(), 2);
 
         let bytes = string.to_wire_bytes();
         let expected = vec![0xff, 0xff];

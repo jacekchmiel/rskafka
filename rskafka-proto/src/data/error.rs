@@ -9,7 +9,7 @@ impl std::fmt::Display for ErrorCode {
     }
 }
 
-impl<'a> KafkaWireFormatParse for ErrorCode {
+impl<'a> WireFormatParse for ErrorCode {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         use nom::combinator::map;
 

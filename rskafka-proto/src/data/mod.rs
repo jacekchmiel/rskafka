@@ -7,7 +7,7 @@ use crate::wire_format::*;
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct BrokerId(pub(crate) i32);
 
-impl KafkaWireFormatParse for BrokerId {
+impl WireFormatParse for BrokerId {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, super::ParseError> {
         nom::combinator::map(i32::parse_bytes, BrokerId)(input)
     }

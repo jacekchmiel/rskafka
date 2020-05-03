@@ -3,7 +3,7 @@ use crate::{
     wire_format::*,
 };
 
-#[derive(Debug, Clone, PartialEq, KafkaWireFormatWrite)]
+#[derive(Debug, Clone, PartialEq, WireFormatWrite)]
 pub struct FindCoordinatorRequestV2 {
     pub key: String,
     pub key_type: KeyType,
@@ -15,7 +15,7 @@ impl KafkaRequest for FindCoordinatorRequestV2 {
     type Response = FindCoordinatorResponseV2;
 }
 
-#[derive(Debug, Clone, PartialEq, KafkaWireFormatParse, KafkaResponse)]
+#[derive(Debug, Clone, PartialEq, WireFormatParse, KafkaResponse)]
 pub struct FindCoordinatorResponseV2 {
     pub throttle_time_ms: i32,
     pub error_code: ErrorCode,
@@ -31,9 +31,9 @@ pub enum KeyType {
     Group = 0,
 }
 
-impl KafkaWireFormatWrite for KeyType {
-    fn serialized_size(&self) -> usize {
-        Self::serialized_size_static()
+impl WireFormatWrite for KeyType {
+    fn wire_size(&self) -> usize {
+        Self::wire_size_static()
     }
 
     fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -42,9 +42,9 @@ impl KafkaWireFormatWrite for KeyType {
     }
 }
 
-impl KafkaWireFormatStaticSize for KeyType {
-    fn serialized_size_static() -> usize {
-        i8::serialized_size_static()
+impl WireFormatSizeStatic for KeyType {
+    fn wire_size_static() -> usize {
+        i8::wire_size_static()
     }
 }
 
@@ -61,7 +61,7 @@ mod test {
             key_type: KeyType::Group,
         };
 
-        assert_eq!(request.serialized_size(), expected.len());
+        assert_eq!(request.wire_size(), expected.len());
         assert_eq!(request.to_wire_bytes(), expected);
     }
 

@@ -13,7 +13,7 @@ use std::convert::TryInto;
 pub use string::{CompactNullableString, NullableString};
 use uuid::Uuid;
 
-impl KafkaWireFormatParse for bool {
+impl WireFormatParse for bool {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         map_res(be_u8, |byte| match byte {
             0u8 => Ok(false),
@@ -23,9 +23,9 @@ impl KafkaWireFormatParse for bool {
     }
 }
 
-impl KafkaWireFormatWrite for bool {
-    fn serialized_size(&self) -> usize {
-        Self::serialized_size_static()
+impl WireFormatWrite for bool {
+    fn wire_size(&self) -> usize {
+        Self::wire_size_static()
     }
 
     fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -34,13 +34,13 @@ impl KafkaWireFormatWrite for bool {
     }
 }
 
-impl KafkaWireFormatStaticSize for bool {
-    fn serialized_size_static() -> usize {
+impl WireFormatSizeStatic for bool {
+    fn wire_size_static() -> usize {
         std::mem::size_of::<u8>()
     }
 }
 
-impl KafkaWireFormatParse for Uuid {
+impl WireFormatParse for Uuid {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         map(take(16usize), |bytes: &[u8]| {
             Uuid::from_bytes(bytes.try_into().unwrap())

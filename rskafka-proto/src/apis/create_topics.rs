@@ -3,7 +3,7 @@ use crate::{
     wire_format::*,
 };
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, KafkaWireFormatWrite)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, WireFormatWrite)]
 pub struct CreateTopic {
     pub name: String,
     pub partitions: i32,
@@ -12,13 +12,13 @@ pub struct CreateTopic {
     pub configs: Vec<TopicConfig>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, KafkaWireFormatWrite)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, WireFormatWrite)]
 pub struct TopicAssignment {
     partition: i32,
     broker_ids: Vec<i32>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, KafkaWireFormatWrite)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, WireFormatWrite)]
 pub struct TopicConfig {
     name: String,
     value: NullableString<'static>,
@@ -51,19 +51,19 @@ impl CreateTopic {
     //TODO: configs
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, KafkaWireFormatWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, WireFormatWrite)]
 pub struct CreateTopicsRequestV1 {
     pub topics: Vec<CreateTopic>,
     pub timeout_ms: i32,
     pub validate_only: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, KafkaWireFormatParse, KafkaResponse)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, WireFormatParse, KafkaResponse)]
 pub struct CreateTopicsResponseV1 {
     pub topics: Vec<CreateTopicResponse>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, KafkaWireFormatParse)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, WireFormatParse)]
 pub struct CreateTopicResponse {
     pub name: String,
     pub error_code: ErrorCode,

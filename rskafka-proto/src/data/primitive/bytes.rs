@@ -8,7 +8,7 @@ use nom::bytes::complete::take;
 use nom::combinator::map;
 use std::convert::TryFrom;
 
-impl KafkaWireFormatParse for Vec<u8> {
+impl WireFormatParse for Vec<u8> {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, ssize) = i32::parse_bytes(input)?;
         let size = usize::try_from(ssize).map_err(|_| custom_error("negative size"))?;
@@ -16,9 +16,9 @@ impl KafkaWireFormatParse for Vec<u8> {
     }
 }
 
-impl KafkaWireFormatWrite for [u8] {
-    fn serialized_size(&self) -> usize {
-        i32::serialized_size_static() + self.len()
+impl WireFormatWrite for [u8] {
+    fn wire_size(&self) -> usize {
+        i32::wire_size_static() + self.len()
     }
 
     fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -30,7 +30,7 @@ impl KafkaWireFormatWrite for [u8] {
 
 pub struct CompactBytes(pub Vec<u8>);
 
-impl<'a> KafkaWireFormatParse for CompactBytes {
+impl<'a> WireFormatParse for CompactBytes {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, VarInt(size_encoded)) = VarInt::parse_bytes(input)?;
         let size = usize::try_from(size_encoded - 1).map_err(|_| custom_error("negative size"))?;
@@ -52,7 +52,7 @@ impl NullableBytes {
     }
 }
 
-impl KafkaWireFormatParse for NullableBytes {
+impl WireFormatParse for NullableBytes {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, ssize) = i32::parse_bytes(input)?;
         match ssize {
