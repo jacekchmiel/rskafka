@@ -1,25 +1,17 @@
 use quote::quote;
 
-use syn::{
-    Attribute, Data,  Expr, ExprAssign, ExprLit, Lit, LitStr, Path,
-};
+use syn::{Attribute, Data, Expr, ExprAssign, ExprLit, Lit, LitStr, Path};
 
 use proc_macro2::{Span, TokenStream};
-use synstructure::decl_derive;
+use synstructure::{decl_derive, VariantInfo};
 
 extern crate proc_macro_error;
 
 use proc_macro_error::proc_macro_error;
 use syn::export::ToTokens;
 
-decl_derive!([KafkaWireFormatParse, attributes(kafka_proto)] => #[proc_macro_error] wire_format_parse_derive);
-decl_derive!([KafkaResponse, attributes(kafka_proto)] => #[proc_macro_error] kafka_response_derive);
-
-decl_derive!([KafkaWireFormatWrite, attributes(kafka_proto)] => #[proc_macro_error] wire_format_write_derive);
-
 fn wire_format_write_derive(s: synstructure::Structure) -> TokenStream {
-    let serialized_size = 
-    s.fold(quote!(0), |acc, bi|  quote!(#acc + #bi.serialized_size()));
+    let serialized_size = s.fold(quote!(0), |acc, bi| quote!(#acc + #bi.serialized_size()));
     let write_into = s.each(|bi| quote!( #bi.write_into(writer)?; ));
 
     s.gen_impl(quote! {
@@ -35,64 +27,56 @@ fn wire_format_write_derive(s: synstructure::Structure) -> TokenStream {
         }
     })
 }
+decl_derive!([KafkaWireFormatWrite, attributes(kafka_proto)] => #[proc_macro_error] wire_format_write_derive);
 
 fn kafka_response_derive(s: synstructure::Structure) -> TokenStream {
-    let struct_ident = &s.ast().ident;
-
-    quote! {
-        impl crate::wire_format::KafkaResponse for #struct_ident {}
-    }
+    s.gen_impl(quote! {
+        gen impl crate::wire_format::KafkaResponse for @Self {}
+    })
 }
+decl_derive!([KafkaResponse, attributes(kafka_proto)] => #[proc_macro_error] kafka_response_derive);
 
-// FIXME: implement with synstructure
 fn wire_format_parse_derive(s: synstructure::Structure) -> TokenStream {
-    let input = s.ast();
-    let s = match &input.data {
-        Data::Struct(s) => s,
+    match &s.ast().data {
+        Data::Struct(_) => (),
         _ => panic!("only structures are supported"),
     };
-    let struct_ident = input.ident.clone();
+    let variant: &VariantInfo = &s.variants()[0];
 
-    let (parse, init): (Vec<TokenStream>, Vec<TokenStream>) = s
-        .fields
-        .iter()
-        .map(|f| {
-            let field_ident = f.ident.as_ref().expect("only named fields are supported");
-            let wire_type = find_wire_type_attr(&f.attrs);
-            // f.attrs.get(0).unwrap().
-            let parse = match wire_type {
-                None => quote!{
-                    let (input, #field_ident) = crate::wire_format::KafkaWireFormatParse::parse_bytes(input)?;
-                },
+    let parse = variant.bindings().iter().map(|bi| {
+        let field = bi.ast();
+        let name = field.ident.as_ref().unwrap();
+        let custom_wire_type = find_wire_type_attr(&field.attrs);
+        match custom_wire_type {
+            None => quote!(let (input, #name) = KafkaWireFormatParse::parse_bytes(input)?;),
+            Some(wire_type) => {
+                let err_message = LitStr::new(&format!("invalid {} value", name), Span::call_site());
+                quote! {
+                    let (input, #name) = #wire_type::parse_bytes(input)?;
+                    let #name = #name.try_into().map_err(|_| crate::error::custom_error(#err_message))?;
+                }
+            },
+        }
+    });
 
-                Some(wire_type) => {
-                    let err_message = LitStr::new(&format!("invalid {} value", field_ident), Span::call_site());
-                    quote! {
-                        let (input, #field_ident) = #wire_type::parse_bytes(input)?;  
-                        use ::std::convert::TryInto;
-                        let #field_ident = #field_ident.try_into().map_err(|_| crate::error::custom_error(#err_message))?;
-                    }
-                }   
-            };
+    let construct = variant.construct(|f, _| {
+        let name = f.ident.as_ref().unwrap();
+        quote!( #name )
+    });
 
-            let init = quote! { #field_ident };
-            (parse, init)
-        })
-        .unzip();
+    s.gen_impl(quote! {
+        extern crate std;
+        use std::convert::TryInto as TryInto__RskafkaProtoDerive;
 
-    let out = quote! {
-        impl crate::wire_format::KafkaWireFormatParse for #struct_ident {
+        gen impl crate::wire_format::KafkaWireFormatParse for @Self {
             fn parse_bytes(input: &[u8]) -> ::nom::IResult<&[u8], Self, crate::error::ParseError> {
-                #( #parse)*
-                Ok((input, #struct_ident { #( #init),* }))
+                #(#parse)*
+                Ok((input, #construct))
             }
         }
-    };
-
-    // eprintln!("TOKENS: {}", out);
-
-    out
+    })
 }
+decl_derive!([KafkaWireFormatParse, attributes(kafka_proto)] => #[proc_macro_error] wire_format_parse_derive);
 
 fn find_wire_type_attr(attributes: &[Attribute]) -> Option<Path> {
     let arg: ExprAssign = attributes
