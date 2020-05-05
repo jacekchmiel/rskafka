@@ -15,7 +15,7 @@ fn wire_format_write_derive(s: synstructure::Structure) -> TokenStream {
     let write_into = s.each(|bi| quote!( #bi.write_into(writer)?; ));
 
     s.gen_impl(quote! {
-        gen impl crate::wire_format::WireFormatWrite for @Self {
+        gen impl rskafka_wire_format::prelude::WireFormatWrite for @Self {
             fn wire_size(&self) -> usize {
                 match self { #wire_size }
             }
@@ -29,13 +29,6 @@ fn wire_format_write_derive(s: synstructure::Structure) -> TokenStream {
 }
 decl_derive!([WireFormatWrite, attributes(kafka_proto)] => #[proc_macro_error] wire_format_write_derive);
 
-fn kafka_response_derive(s: synstructure::Structure) -> TokenStream {
-    s.gen_impl(quote! {
-        gen impl crate::wire_format::KafkaResponse for @Self {}
-    })
-}
-decl_derive!([KafkaResponse, attributes(kafka_proto)] => #[proc_macro_error] kafka_response_derive);
-
 fn wire_format_parse_derive(s: synstructure::Structure) -> TokenStream {
     match &s.ast().data {
         Data::Struct(_) => (),
@@ -48,12 +41,12 @@ fn wire_format_parse_derive(s: synstructure::Structure) -> TokenStream {
         let name = field.ident.as_ref().unwrap();
         let custom_wire_type = find_wire_type_attr(&field.attrs);
         match custom_wire_type {
-            None => quote!(let (input, #name) = WireFormatParse::parse_bytes(input)?;),
+            None => quote!(let (input, #name) = ::rskafka_wire_format::WireFormatParse::parse_bytes(input)?;),
             Some(wire_type) => {
                 let err_message = LitStr::new(&format!("invalid {} value", name), Span::call_site());
                 quote! {
                     let (input, #name) = #wire_type::parse_bytes(input)?;
-                    let #name = #name.try_into().map_err(|_| crate::error::custom_error(#err_message))?;
+                    let #name = #name.try_into().map_err(|_| ::rskafka_wire_format::error::custom_error(#err_message))?;
                 }
             },
         }
@@ -68,8 +61,8 @@ fn wire_format_parse_derive(s: synstructure::Structure) -> TokenStream {
         extern crate std;
         use std::convert::TryInto as TryInto__RskafkaProtoDerive;
 
-        gen impl crate::wire_format::WireFormatParse for @Self {
-            fn parse_bytes(input: &[u8]) -> ::nom::IResult<&[u8], Self, crate::error::ParseError> {
+        gen impl rskafka_wire_format::prelude::WireFormatParse for @Self {
+            fn parse_bytes(input: &[u8]) -> ::rskafka_wire_format::IResult<&[u8], Self, ::rskafka_wire_format::error::ParseError> {
                 #(#parse)*
                 Ok((input, #construct))
             }

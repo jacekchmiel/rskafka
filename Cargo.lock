@@ -66,12 +66,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 
 [[package]]
-name = "either"
-version = "1.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb1f6b1ce1c140482ea30ddd3335fc0024ac7ee112895426e0a629a6c20adfe3"
-
-[[package]]
 name = "env_logger"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -479,33 +473,38 @@ name = "rskafka"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "byteorder",
  "env_logger",
  "futures",
  "log",
- "nom",
  "rskafka-proto",
+ "rskafka-wire-format",
+ "rskafka-wire-format-derive",
  "thiserror",
  "tokio",
- "uuid",
 ]
 
 [[package]]
 name = "rskafka-proto"
 version = "0.1.0"
 dependencies = [
- "byteorder",
- "either",
  "env_logger",
  "log",
+ "rskafka-wire-format",
+ "rskafka-wire-format-derive",
+]
+
+[[package]]
+name = "rskafka-wire-format"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
  "nom",
- "rskafka-proto-derive",
  "thiserror",
  "uuid",
 ]
 
 [[package]]
-name = "rskafka-proto-derive"
+name = "rskafka-wire-format-derive"
 version = "0.1.0"
 dependencies = [
  "proc-macro-error",

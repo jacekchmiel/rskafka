@@ -1,12 +1,10 @@
 use crate::{
     data::{api_key::ApiKey, error::ErrorCode},
-    wire_format::*,
-    ParseError,
+    KafkaRequest, KafkaResponse,
 };
-use either::Either;
-use nom::combinator::map;
-use nom::number::complete::be_i16;
-use nom::sequence::tuple;
+// use nom::combinator::map;
+// use nom::sequence::tuple;
+use rskafka_wire_format::{error::ParseError, prelude::*};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, WireFormatWrite)]
 pub struct ApiVersionsRequestV0;
@@ -17,11 +15,13 @@ impl KafkaRequest for ApiVersionsRequestV0 {
     type Response = ApiVersionsResponseV0;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, KafkaResponse)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApiVersionsResponseV0 {
     pub error_code: ErrorCode,
     pub api_keys: Vec<ApiVersionsRange>,
 }
+
+impl KafkaResponse for ApiVersionsResponseV0 {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApiVersionsRange {
@@ -30,41 +30,46 @@ pub struct ApiVersionsRange {
     pub max_version: i16,
 }
 
-struct UnknownApiKey(pub i16);
-
-fn api_versions_filtered(input: &[u8]) -> nom::IResult<&[u8], Vec<ApiVersionsRange>, ParseError> {
-    map(
-        Vec::<Either<ApiVersionsRange, UnknownApiKey>>::parse_bytes,
-        |versions| versions.into_iter().filter_map(Either::left).collect(),
-    )(input)
-}
-
-impl WireFormatParse for ApiVersionsResponseV0 {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        map(
-            tuple((ErrorCode::parse_bytes, api_versions_filtered)),
-            |(error_code, api_keys)| ApiVersionsResponseV0 {
-                error_code,
-                api_keys,
-            },
-        )(input)
+impl ApiVersionsRange {
+    fn try_from_raw(v: ApiVersionsRangeRaw) -> Option<Self> {
+        ApiKey::try_from_i16(v.api_key).map(|api_key| ApiVersionsRange {
+            api_key,
+            min_version: v.min_version,
+            max_version: v.max_version,
+        })
     }
 }
 
-impl WireFormatParse for Either<ApiVersionsRange, UnknownApiKey> {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        map(
-            tuple((be_i16, be_i16, be_i16)),
-            |(api_key_code, min_version, max_version)| match ApiKey::try_from_i16(api_key_code).ok()
-            {
-                Some(api_key) => Either::Left(ApiVersionsRange {
-                    api_key,
-                    min_version,
-                    max_version,
-                }),
-                None => Either::Right(UnknownApiKey(api_key_code)),
-            },
-        )(input)
+#[derive(Debug, Clone, PartialEq, Eq, WireFormatParse)]
+struct ApiVersionsRangeRaw {
+    pub api_key: i16,
+    pub min_version: i16,
+    pub max_version: i16,
+}
+
+// fn api_versions_filtered(input: &[u8]) -> nom::IResult<&[u8], Vec<ApiVersionsRange>, ParseError> {
+//     let (input, versions) = Vec::<ApiVersionsRangeRaw>::parse_bytes(input)?;
+//     let versions = versions
+//         .into_iter()
+//         .filter_map(ApiVersionsRange::try_from_raw)
+//         .collect();
+//     Ok((input, versions))
+// }
+
+impl WireFormatParse for ApiVersionsResponseV0 {
+    fn parse_bytes(input: &[u8]) -> IResult<&[u8], Self, ParseError> {
+        let (input, error_code) = ErrorCode::parse_bytes(input)?;
+        let (input, raw) = Vec::<ApiVersionsRangeRaw>::parse_bytes(input)?;
+        let api_keys = raw
+            .into_iter()
+            .filter_map(ApiVersionsRange::try_from_raw)
+            .collect();
+        let response = ApiVersionsResponseV0 {
+            error_code,
+            api_keys,
+        };
+
+        Ok((input, response))
     }
 }
 
@@ -97,7 +102,7 @@ mod test {
     fn api_versions_response_v0_parse() {
         let input = vec![0, 0, 0, 0, 0, 1, 0, 18, 0, 0, 0, 7];
         let expected = ApiVersionsResponseV0 {
-            error_code: ErrorCode(0),
+            error_code: ErrorCode::None,
             api_keys: vec![ApiVersionsRange {
                 api_key: ApiKey::ApiVersions,
                 min_version: 0,

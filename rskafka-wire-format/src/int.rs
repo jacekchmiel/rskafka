@@ -1,4 +1,5 @@
-use crate::{wire_format::*, ParseError};
+use crate::error::ParseError;
+use crate::prelude::*;
 use byteorder::{BigEndian, WriteBytesExt};
 use std::io::Write;
 

@@ -1,5 +1,5 @@
 use super::api_key::ApiKey;
-use crate::data::primitive::NullableString;
+use rskafka_wire_format::prelude::NullableString;
 
 #[derive(Debug, Clone, WireFormatWrite)]
 pub(crate) struct RequestHeader<'a> {
@@ -12,7 +12,7 @@ pub(crate) struct RequestHeader<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::wire_format::*;
+    use rskafka_wire_format::prelude::*;
 
     #[test]
     fn header_wire_format() {

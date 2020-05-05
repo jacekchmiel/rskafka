@@ -1,8 +1,5 @@
-use crate::{
-    error::{custom_error, custom_io_error},
-    wire_format::*,
-    ParseError,
-};
+use crate::error::{custom_error, custom_io_error, ParseError};
+use crate::prelude::*;
 use byteorder::{BigEndian, WriteBytesExt};
 use nom::bytes::complete::take;
 use std::borrow::Cow;

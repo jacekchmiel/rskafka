@@ -1,9 +1,6 @@
 use super::int::VarInt;
-use crate::{
-    error::{custom_error, custom_io_error},
-    wire_format::*,
-    ParseError,
-};
+use crate::error::{custom_error, custom_io_error, ParseError};
+use crate::prelude::*;
 use nom::bytes::complete::take;
 use nom::combinator::map;
 use std::convert::TryFrom;
@@ -56,11 +53,11 @@ impl WireFormatParse for NullableBytes {
     fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         let (input, ssize) = i32::parse_bytes(input)?;
         match ssize {
-            -1 => Ok((input, NullableBytes::with_null())),
+            -1i32 => Ok((input, NullableBytes::with_null())),
             other if other < 0 => panic!(), //FIXME: error
             other => {
-                let count = other as usize;
-                // let (_, bytes) = take(count)(input);
+                let count = other as usize; //FIXME error
+                                            // let (_, bytes) = take(count)(input);
                 map(take(count), NullableBytes::with_data)(input)
             }
         }
@@ -106,5 +103,12 @@ mod test {
             NullableBytes::parse_bytes(&[0, 0, 0, 3, 1, 2, 3, 4, 5, 6]),
             Ok((remaining, NullableBytes::with_data(&[1, 2, 3])))
         );
+    }
+    #[test]
+    fn write_bytes() {
+        let bytes: Vec<u8> = vec![1, 2, 3];
+        let expected = vec![0, 0, 0, 3, 1, 2, 3];
+        assert_eq!(bytes.wire_size(), expected.len());
+        assert_eq!(bytes.to_wire_bytes(), expected);
     }
 }

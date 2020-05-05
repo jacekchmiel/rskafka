@@ -1,7 +1,8 @@
 use crate::{
-    data::{api_key::ApiKey, error::ErrorCode, primitive::NullableString},
-    wire_format::*,
+    data::{api_key::ApiKey, error::ErrorCode},
+    KafkaRequest, KafkaResponse,
 };
+use rskafka_wire_format::prelude::*;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, WireFormatWrite)]
 pub struct CreateTopic {
@@ -58,10 +59,12 @@ pub struct CreateTopicsRequestV1 {
     pub validate_only: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, WireFormatParse, KafkaResponse)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, WireFormatParse)]
 pub struct CreateTopicsResponseV1 {
     pub topics: Vec<CreateTopicResponse>,
 }
+
+impl KafkaResponse for CreateTopicsResponseV1 {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, WireFormatParse)]
 pub struct CreateTopicResponse {

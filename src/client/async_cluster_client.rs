@@ -57,7 +57,7 @@ impl AsyncClusterClient {
     pub(crate) async fn make_request<R: KafkaRequest>(
         &self,
         r: R,
-        broker: Broker,
+        broker: Option<BrokerId>,
     ) -> Result<R::Response, Error> {
         let mut managed = self.get_connection(broker).await?;
         let conn = managed.get().await?;
@@ -66,11 +66,11 @@ impl AsyncClusterClient {
 
     async fn get_connection<'a>(
         &'a self,
-        broker: Broker,
+        broker: Option<BrokerId>,
     ) -> Result<MutexGuard<'a, Managed>, Error> {
         match broker {
-            Broker::Any => Ok(self.conns.values().next().unwrap().lock().await),
-            Broker::Id(id) => match self.conns.get(&id) {
+            None => Ok(self.conns.values().next().unwrap().lock().await),
+            Some(id) => match self.conns.get(&id) {
                 Some(conn) => Ok(conn.lock().await),
                 None => Err(Error::ClusterError(format!("Broker {} not found", id))),
             },

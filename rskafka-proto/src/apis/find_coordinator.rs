@@ -1,7 +1,8 @@
 use crate::{
-    data::{api_key::ApiKey, error::ErrorCode, primitive::NullableString, BrokerId},
-    wire_format::*,
+    data::{api_key::ApiKey, error::ErrorCode, BrokerId},
+    KafkaRequest, KafkaResponse,
 };
+use rskafka_wire_format::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, WireFormatWrite)]
 pub struct FindCoordinatorRequestV2 {
@@ -15,7 +16,7 @@ impl KafkaRequest for FindCoordinatorRequestV2 {
     type Response = FindCoordinatorResponseV2;
 }
 
-#[derive(Debug, Clone, PartialEq, WireFormatParse, KafkaResponse)]
+#[derive(Debug, Clone, PartialEq, WireFormatParse)]
 pub struct FindCoordinatorResponseV2 {
     pub throttle_time_ms: i32,
     pub error_code: ErrorCode,
@@ -25,6 +26,8 @@ pub struct FindCoordinatorResponseV2 {
     #[kafka_proto(wire_type = "i32")]
     pub port: u16,
 }
+
+impl KafkaResponse for FindCoordinatorResponseV2 {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyType {
@@ -71,7 +74,7 @@ mod test {
         let parsed = FindCoordinatorResponseV2::from_wire_bytes(&bytes);
         let expected = FindCoordinatorResponseV2 {
             throttle_time_ms: 0,
-            error_code: ErrorCode(0),
+            error_code: ErrorCode::None,
             error_message: None.into(),
             node_id: BrokerId(1001),
             host: "127.0.0.1".into(),

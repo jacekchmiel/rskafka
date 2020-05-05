@@ -1,14 +1,15 @@
 #[macro_use]
-extern crate rskafka_proto_derive;
+extern crate rskafka_wire_format_derive;
 
 pub mod apis;
 mod data;
 mod error;
-mod wire_format;
+mod request;
+mod response;
 
 pub use data::{api_key::ApiKey, error::ErrorCode, BrokerId};
-pub use error::ParseError;
-pub use wire_format::{KafkaRequest, KafkaResponse};
+pub use request::KafkaRequest;
+pub use response::KafkaResponse;
 
 #[cfg(test)]
 mod test_utils {

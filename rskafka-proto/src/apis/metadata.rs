@@ -1,5 +1,8 @@
-use crate::data::{api_key::ApiKey, error::ErrorCode, primitive::NullableString, BrokerId};
-use crate::wire_format::*;
+use crate::{
+    data::{api_key::ApiKey, error::ErrorCode, BrokerId},
+    KafkaRequest, KafkaResponse,
+};
+use rskafka_wire_format::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, WireFormatWrite)]
 pub struct MetadataRequestV2 {
@@ -12,13 +15,15 @@ impl KafkaRequest for MetadataRequestV2 {
     type Response = MetadataResponseV2;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, WireFormatParse, KafkaResponse)]
+#[derive(Debug, Clone, PartialEq, Eq, WireFormatParse)]
 pub struct MetadataResponseV2 {
     pub brokers: Vec<BrokerMetadata>,
     pub cluster_id: NullableString<'static>,
     pub controller_id: i32,
     pub topics: Vec<TopicMetadata>,
 }
+
+impl KafkaResponse for MetadataResponseV2 {}
 
 #[derive(Debug, Clone, PartialEq, Eq, WireFormatParse)]
 pub struct BrokerMetadata {

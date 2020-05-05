@@ -30,7 +30,7 @@ impl BrokerConnection {
         debug!("get_api_versions");
         let response = self.make_request(&ApiVersionsRequestV0).await?;
         match response.error_code {
-            ErrorCode(0) => Ok(response.api_keys),
+            ErrorCode::None => Ok(response.api_keys),
             error_code => Err(error_code.into()),
         }
     }
@@ -39,6 +39,7 @@ impl BrokerConnection {
         &mut self,
         request: &Req,
     ) -> Result<Req::Response, Error> {
+        debug!("Request {}", Req::API_KEY);
         // self.ensure_api_supported(request)?;
         self.last_correlation_id += 1;
         let mut request_buffer = Vec::new();

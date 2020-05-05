@@ -1,15 +1,17 @@
 pub mod api_key;
 pub mod error;
 pub mod header;
-pub mod primitive;
 
-use crate::wire_format::*;
+use rskafka_wire_format::error::ParseError;
+use rskafka_wire_format::prelude::*;
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct BrokerId(pub(crate) i32);
 
 impl WireFormatParse for BrokerId {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, super::ParseError> {
-        nom::combinator::map(i32::parse_bytes, BrokerId)(input)
+    fn parse_bytes(input: &[u8]) -> IResult<&[u8], Self, ParseError> {
+        let (input, v) = i32::parse_bytes(input)?;
+        Ok((input, BrokerId(v)))
     }
 }
 

@@ -6,7 +6,7 @@ use tokio::signal;
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     env_logger::Builder::new()
-        .parse_filters("rkafka::client=trace,rskafka::consumer=trace,info")
+        .parse_filters("rskafka::consumer=trace,info") //
         .init();
 
     let config = ConsumerConfig {
@@ -28,7 +28,7 @@ async fn main() -> Result<(), Error> {
 
     assignment_stream
         .try_for_each(|message_stream| async move {
-            println!("Assigned to partitions");
+            println!("Assignment received");
             let committer = message_stream.commit_sink();
 
             message_stream

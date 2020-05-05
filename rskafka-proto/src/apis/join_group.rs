@@ -1,7 +1,8 @@
 use crate::{
     data::{api_key::ApiKey, error::ErrorCode},
-    wire_format::*,
+    KafkaRequest, KafkaResponse,
 };
+use rskafka_wire_format::{error::ParseError, prelude::*};
 use std::borrow::Cow;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, WireFormatWrite)]
@@ -26,7 +27,7 @@ pub struct Protocol<'a> {
     pub metadata: Cow<'a, [u8]>,
 }
 
-#[derive(Debug, Clone, PartialEq, WireFormatParse, KafkaResponse)]
+#[derive(Debug, Clone, PartialEq, WireFormatParse)]
 pub struct JoinGroupResponseV4 {
     pub throttle_time_ms: i32,
     pub error_code: ErrorCode,
@@ -35,6 +36,12 @@ pub struct JoinGroupResponseV4 {
     pub leader: String,
     pub member_id: String,
     pub members: Vec<GroupMember>,
+}
+
+impl KafkaResponse for JoinGroupResponseV4 {
+    fn from_bytes(input: &[u8]) -> Result<Self, ParseError> {
+        Self::from_wire_bytes(input)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, WireFormatParse)]
