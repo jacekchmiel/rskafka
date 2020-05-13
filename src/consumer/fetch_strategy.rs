@@ -63,7 +63,7 @@ impl<'a> FetchStrategy for SimpleFetchStrategy<'a> {
             topics: vec![TopicFetch {
                 name: topic.to_owned().into(),
                 partitions: vec![PartitionFetch {
-                    fetch_offset: self.offsets.get(topic, partition).expect("missing offset") + 1, //TODO: error on missing topic
+                    fetch_offset: self.offsets.get(topic, partition).expect("missing offset"), //TODO: error on missing topic
                     index: partition,
                     partition_max_bytes: 1024 * 1024 * 1024,
                 }],
@@ -100,7 +100,7 @@ impl Offsets {
             for p in t.partitions {
                 match p.error_code {
                     ErrorCode::None => {
-                        partitions.insert(p.index, p.committed_offset);
+                        partitions.insert(p.index, p.committed_offset + 1);
                     }
                     error => return Err(Error::ErrorResponse(error, "offset fetch error".into())),
                 }

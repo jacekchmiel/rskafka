@@ -40,10 +40,13 @@ impl FetchResponse {
     pub fn into_messages_owned(self) -> impl Iterator<Item = KafkaMessage<'static>> {
         self.topics.into_iter().flat_map(|t| {
             let topic = t.name;
-            t.partitions.into_iter().flat_map(move |p| {
-                let batch = RecordBatch::over_wire_bytes(&p.record_set).unwrap();
-                KafkaBatch::new(batch, topic.clone(), p.index).into_messages_owned()
-            })
+            t.partitions
+                .into_iter()
+                .filter(|p| !p.record_set.is_empty())
+                .flat_map(move |p| {
+                    let batch = RecordBatch::over_wire_bytes(&p.record_set).unwrap();
+                    KafkaBatch::new(batch, topic.clone(), p.index).into_messages_owned()
+                })
         })
     }
 }
