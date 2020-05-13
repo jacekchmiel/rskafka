@@ -19,7 +19,7 @@ pub enum Error {
     ProtocolError(Cow<'static, str>),
 
     #[error("received error response: {0} {1}")]
-    ErrorResponse(ErrorCode, String),
+    ErrorResponse(ErrorCode, Cow<'static, str>),
 
     #[error("api not supported {:0?}, version {1}")]
     ApiNotSupported(ApiKey, i16),
@@ -33,7 +33,7 @@ pub enum Error {
 
 impl From<(ErrorCode, Option<String>)> for Error {
     fn from(v: (ErrorCode, Option<String>)) -> Self {
-        Error::ErrorResponse(v.0, v.1.unwrap_or(String::new()))
+        Error::ErrorResponse(v.0, v.1.map(Into::into).unwrap_or("".into()))
     }
 }
 

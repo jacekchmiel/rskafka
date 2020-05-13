@@ -1,13 +1,18 @@
 use crate::error::{custom_error, custom_io_error, ParseError};
+use crate::int::VarInt;
 use crate::prelude::*;
+use crate::{parse_helpers, IResult};
 use byteorder::{BigEndian, WriteBytesExt};
-use nom::bytes::complete::take;
+use nom::{
+    bytes::complete::take,
+    combinator::{map, map_res},
+};
 use std::borrow::Cow;
 use std::convert::TryFrom;
 
 impl WireFormatParse for String {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        let (input, size) = i16::parse_bytes(input)?;
+    fn parse(input: &[u8]) -> IResult<&[u8], Self, ParseError> {
+        let (input, size) = i16::parse(input)?;
         let size = usize::try_from(size).map_err(|_| custom_error("negative size"))?;
 
         let (input, bytes) = take(size)(input)?;
@@ -120,8 +125,8 @@ impl<'a> WireFormatWrite for NullableString<'a> {
 }
 
 impl WireFormatParse for NullableString<'static> {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        let (input, ssize) = i16::parse_bytes(input)?;
+    fn parse(input: &[u8]) -> IResult<&[u8], Self, ParseError> {
+        let (input, ssize) = i16::parse(input)?;
         match ssize {
             -1 => Ok((input, NullableString::with_null())),
             other if other < 0 => panic!(), //FIXME: error
@@ -134,11 +139,67 @@ impl WireFormatParse for NullableString<'static> {
         }
     }
 }
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompactString<'a>(Cow<'a, str>);
+
+impl<'a> CompactString<'a> {
+    /// Transform to CompactString with 'static lifetime by switching wrapped data
+    /// to Owned variant. Memory allocation is only performed if original data was
+    /// borrowed.
+    pub fn detach(self) -> CompactString<'static> {
+        CompactString(self.0.into_owned().into())
+    }
+
+    /// Access wrapped str data
+    pub fn as_str(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl<'a> From<&'a str> for CompactString<'a> {
+    fn from(s: &'a str) -> Self {
+        CompactString(s.into())
+    }
+}
+
+impl<'a> From<String> for CompactString<'a> {
+    fn from(s: String) -> Self {
+        CompactString(s.into())
+    }
+}
+
+impl<'a> WireFormatWrite for CompactString<'a> {
+    fn wire_size(&self) -> usize {
+        let len = self.0.len();
+        let len_size = VarInt(len as i32).wire_size();
+        len_size + len
+    }
+
+    fn write_into<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        VarInt(self.0.len() as i32).write_into(writer)?; // TODO: conversion error
+        writer.write_all(self.0.as_bytes())
+    }
+}
+
+impl WireFormatParse for CompactString<'static> {
+    fn parse(input: &[u8]) -> IResult<&[u8], Self, ParseError> {
+        map(CompactString::borrow_parse, CompactString::detach)(input)
+    }
+}
+
+impl<'a> WireFormatBorrowParse<'a> for CompactString<'a> {
+    fn borrow_parse(input: &'a [u8]) -> IResult<&'a [u8], Self, ParseError> {
+        let (input, len) = map_res(VarInt::parse, parse_helpers::int_as_usize)(input)?;
+        let (input, parsed) = map_res(take(len - 1), parse_helpers::bytes_as_utf8)(input)?; //TODO underflow
+
+        Ok((input, CompactString(parsed.into())))
+    }
+}
 
 pub struct CompactNullableString<'a>(pub Option<Cow<'a, str>>);
 
 impl WireFormatParse for CompactNullableString<'static> {
-    fn parse_bytes(_input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
+    fn parse(_input: &[u8]) -> IResult<&[u8], Self, ParseError> {
         // map(compact_nullable_bytes, |v| v.map(try_into_utf8))(input)
         todo!()
     }
@@ -152,7 +213,7 @@ mod test {
     fn parse_string() {
         let remaining: &[u8] = &[4, 5, 6];
         assert_eq!(
-            String::parse_bytes(&[0, 3, 0x61, 0x62, 0x63, 4, 5, 6]),
+            String::parse(&[0, 3, 0x61, 0x62, 0x63, 4, 5, 6]),
             Ok((remaining, String::from("abc")))
         );
     }
@@ -161,7 +222,7 @@ mod test {
     fn parse_string_empty() {
         let remaining: &[u8] = &[4, 5, 6];
         assert_eq!(
-            String::parse_bytes(&[0, 0, 4, 5, 6]),
+            String::parse(&[0, 0, 4, 5, 6]),
             Ok((remaining, String::from("")))
         );
     }
@@ -200,7 +261,7 @@ mod test {
     fn parse_nullable_string_null() {
         let remaining: &[u8] = &[4, 5, 6];
         assert_eq!(
-            NullableString::parse_bytes(&[255, 255, 4, 5, 6]),
+            NullableString::parse(&[255, 255, 4, 5, 6]),
             Ok((remaining, NullableString::with_null()))
         );
     }
@@ -209,7 +270,7 @@ mod test {
     fn parse_nullable_string_empty() {
         let remaining: &[u8] = &[4, 5, 6];
         assert_eq!(
-            NullableString::parse_bytes(&[0, 0, 4, 5, 6]),
+            NullableString::parse(&[0, 0, 4, 5, 6]),
             Ok((remaining, NullableString::with_borrowed("")))
         );
     }
@@ -218,7 +279,7 @@ mod test {
     fn parse_nullable_string() {
         let remaining: &[u8] = &[4, 5, 6];
         assert_eq!(
-            NullableString::parse_bytes(&[0, 3, 0x61, 0x62, 0x63, 4, 5, 6]),
+            NullableString::parse(&[0, 3, 0x61, 0x62, 0x63, 4, 5, 6]),
             Ok((remaining, NullableString::with_borrowed("abc")))
         );
     }

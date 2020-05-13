@@ -411,8 +411,8 @@ impl std::fmt::Display for ErrorCode {
 }
 
 impl<'a> WireFormatParse for ErrorCode {
-    fn parse_bytes(input: &[u8]) -> IResult<&[u8], Self, ParseError> {
-        let (input, v) = i16::parse_bytes(input)?;
+    fn parse(input: &[u8]) -> IResult<&[u8], Self, ParseError> {
+        let (input, v) = i16::parse(input)?;
         Ok((input, ErrorCode::from_i16(v)))
     }
 }

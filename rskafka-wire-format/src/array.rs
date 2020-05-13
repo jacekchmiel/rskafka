@@ -1,7 +1,7 @@
-use crate::error::ParseError;
-use crate::prelude::*;
+use crate::error::{custom_error, ParseError};
+use crate::{parse_helpers, prelude::*};
 use nom::{
-    combinator::{map, map_res},
+    combinator::{iterator, map, map_res},
     multi::many_m_n,
 };
 use std::{
@@ -13,23 +13,42 @@ impl<T> WireFormatParse for Vec<T>
 where
     T: WireFormatParse,
 {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        let (input, size) = map_res(i32::parse_bytes, try_into_usize)(input)?;
-        many_m_n(size, size, T::parse_bytes)(input)
+    fn parse(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
+        let (input, size) = i32::parse(input)?;
+
+        // Seems like each array might sometimes be a "null array" encoded with lenghth set to -1.
+        // Let's keep interface simple and use empty vec in that case until we need to distinguish
+        // empty and "null array".
+        if size == -1 {
+            Ok((input, vec![]))
+        } else {
+            let size = usize::try_from(size).map_err(|_| custom_error("negative size"))?;
+            many_m_n(size, size, T::parse)(input)
+        }
     }
 }
 
-fn try_into_usize(v: i32) -> Result<usize, ParseError> {
-    v.try_into()
-        .map_err(|_| ParseError::Custom("negative array size".into()))
+impl<'a, T: WireFormatBorrowParse<'a>> WireFormatBorrowParse<'a> for Vec<T> {
+    fn borrow_parse(input: &'a [u8]) -> IResult<&'a [u8], Self, ParseError> {
+        let (input, size) = map_res(i32::parse, parse_helpers::int_as_usize)(input)?;
+        let mut it = iterator(input, T::borrow_parse);
+        let items: Vec<T> = it.collect();
+        let input = it.finish().map(|(input, ())| input)?;
+
+        if items.len() != size {
+            return Err(custom_error("invalid number of items"));
+        } else {
+            Ok((input, items))
+        }
+    }
 }
 
 impl<T> WireFormatParse for Cow<'static, [T]>
 where
     T: WireFormatParse + Clone,
 {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        map(Vec::<T>::parse_bytes, Cow::Owned)(input)
+    fn parse(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
+        map(Vec::<T>::parse, Cow::Owned)(input)
     }
 }
 

@@ -35,12 +35,11 @@ impl BrokerConnection {
         }
     }
 
-    pub(crate) async fn make_request<'a, Req: KafkaRequest>(
+    pub(crate) async fn make_request_no_parse<Req: KafkaRequest>(
         &mut self,
         request: &Req,
-    ) -> Result<Req::Response, Error> {
+    ) -> Result<Vec<u8>, Error> {
         debug!("Request {}", Req::API_KEY);
-        // self.ensure_api_supported(request)?;
         self.last_correlation_id += 1;
         let mut request_buffer = Vec::new();
 
@@ -49,9 +48,28 @@ impl BrokerConnection {
             self.last_correlation_id,
             Some(&self.client_id),
         )?;
-
         self.stream.write_all(&request_buffer).await?;
         let response_bytes = self.read_response(self.last_correlation_id).await?;
+        Ok(response_bytes)
+    }
+
+    pub(crate) async fn make_request<'a, Req: KafkaRequest>(
+        &mut self,
+        request: &Req,
+    ) -> Result<Req::Response, Error> {
+        let response_bytes = self.make_request_no_parse(request).await?;
+        // debug!("Request {}", Req::API_KEY);
+        // self.last_correlation_id += 1;
+        // let mut request_buffer = Vec::new();
+
+        // request.write_bytes(
+        //     &mut request_buffer,
+        //     self.last_correlation_id,
+        //     Some(&self.client_id),
+        // )?;
+
+        // self.stream.write_all(&request_buffer).await?;
+        // let response_bytes = self.read_response(self.last_correlation_id).await?;
         let response = Req::Response::from_bytes(&response_bytes)?;
 
         Ok(response)

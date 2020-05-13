@@ -4,7 +4,7 @@ use nom::combinator::map_res;
 use nom::number::complete::be_u8;
 
 impl WireFormatParse for bool {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
+    fn parse(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
         map_res(be_u8, |byte| match byte {
             0u8 => Ok(false),
             1u8 => Ok(true),

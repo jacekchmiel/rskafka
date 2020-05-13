@@ -6,7 +6,7 @@ use tokio::signal;
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     env_logger::Builder::new()
-        .parse_filters("rskafka::consumer=trace,info") //
+        .parse_filters("rskafka::consumer=trace,rskafka::fetch=trace,info") //
         .init();
 
     let config = ConsumerConfig {
@@ -26,12 +26,13 @@ async fn main() -> Result<(), Error> {
         Ok::<(), anyhow::Error>(())
     });
 
-    assignment_stream
-        .try_for_each(|message_stream| async move {
+    let result = assignment_stream
+        .try_for_each(|assignment| async move {
             println!("Assignment received");
-            let committer = message_stream.commit_sink();
+            let committer = assignment.commit_sink();
 
-            message_stream
+            assignment
+                .into_message_stream()
                 .then(|msg| async move {
                     println!("{:#?}", msg);
                     msg.into_offset()
@@ -43,9 +44,13 @@ async fn main() -> Result<(), Error> {
             println!("Assignment revoked");
             Ok(())
         })
-        .await?;
+        .await
+        .map_err(|e| e.0);
 
-    println!("Finished");
+    match result {
+        Ok(_) => println!("Finished"),
+        Err(e) => eprintln!("{:?}", e),
+    }
 
     Ok(())
 }

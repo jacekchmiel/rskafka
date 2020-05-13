@@ -118,8 +118,8 @@ impl ApiKey {
 }
 
 impl WireFormatParse for ApiKey {
-    fn parse_bytes(input: &[u8]) -> IResult<&[u8], Self, ParseError> {
-        let (input, value) = i16::parse_bytes(input)?;
+    fn parse(input: &[u8]) -> IResult<&[u8], Self, ParseError> {
+        let (input, value) = i16::parse(input)?;
         match ApiKey::try_from_i16(value) {
             Some(api_key) => Ok((input, api_key)),
             None => Err(custom_error("unknown api key")),

@@ -1,17 +1,24 @@
 use crate::{
     client::{AsyncClusterClient, Broker},
     message::KafkaPartition,
-    Error, KafkaMessage, KafkaOffset,
+    Error as RsKafkaError, KafkaMessage, KafkaOffset,
 };
+use anyhow::{Context as AnyhowContext, Error, Result};
+use assignment_stream::{Assignment, AssignmentStream};
+use fetch_data::FetchResponse;
+use fetch_strategy::{AssignmentContext, FetchStrategy, Offsets, SimpleFetchStrategy};
 use futures::prelude::*;
-use futures::ready;
 use log::{debug, error, info, log_enabled, trace, warn};
 use rskafka_proto::{
     apis::{
+        fetch::FetchResponseV4,
         find_coordinator::{self, FindCoordinatorRequestV2, FindCoordinatorResponseV2},
         join_group::{GroupMember, JoinGroupRequestV4, JoinGroupResponseV4, Protocol},
         metadata::{MetadataRequestV2, MetadataResponseV2, TopicMetadata},
-        sync_group::{Assignment, SyncGroupRequestV2, SyncGroupResponseV2},
+        offset_fetch::{
+            OffsetFetchRequestV1, OffsetFetchResponseV1, TopicOffsets, TopicPartitions,
+        },
+        sync_group::{MemberAssignmentData, SyncGroupRequestV2, SyncGroupResponseV2},
     },
     BrokerId, ErrorCode,
 };
@@ -29,6 +36,30 @@ use tokio::{
     time,
 };
 
+mod assignment_stream;
+mod fetch_data;
+mod fetch_strategy;
+
+pub struct ConsumerError(pub Error);
+
+impl ConsumerError {
+    pub fn context<C>(self, context: C) -> Self
+    where
+        C: std::fmt::Display + Send + Sync + 'static,
+    {
+        ConsumerError(self.0.context(context))
+    }
+}
+
+impl<E> From<E> for ConsumerError
+where
+    E: std::error::Error + Send + Sync + 'static,
+{
+    fn from(e: E) -> Self {
+        ConsumerError(anyhow::Error::from(e))
+    }
+}
+
 pub struct ConsumerConfig {
     pub topics: Vec<String>,
     pub group_id: String,
@@ -36,7 +67,7 @@ pub struct ConsumerConfig {
 }
 
 pub struct Consumer {
-    receiver: mpsc::Receiver<Result<MessageStream, Error>>,
+    receiver: mpsc::Receiver<Result<Assignment, ConsumerError>>,
     killswitch: ConsumerKillswitch,
 }
 
@@ -57,7 +88,7 @@ impl Consumer {
         self,
     ) -> (
         ConsumerKillswitch,
-        impl Stream<Item = Result<MessageStream, Error>>,
+        impl Stream<Item = Result<Assignment, ConsumerError>>,
     ) {
         (self.killswitch, self.receiver)
     }
@@ -118,13 +149,15 @@ impl ConsumerInternals {
 
     async fn consumer_loop(
         self,
-        mut sender: mpsc::Sender<Result<MessageStream, Error>>,
+        mut assignment_sender: mpsc::Sender<Result<Assignment, ConsumerError>>,
         shutdown: Arc<Notify>,
     ) {
-        let result = self.consumer_loop_inner(sender.clone(), shutdown).await;
+        let result = self
+            .consumer_loop_inner(assignment_sender.clone(), shutdown)
+            .await;
         match result {
             Err(e) => {
-                let _ = sender.send(Err(e)).await;
+                let _ = assignment_sender.send(Err(ConsumerError(e.into()))).await;
             }
             _ => {}
         }
@@ -132,30 +165,34 @@ impl ConsumerInternals {
 
     async fn consumer_loop_inner(
         self,
-        mut sender: mpsc::Sender<Result<MessageStream, Error>>,
+        mut sender: mpsc::Sender<Result<Assignment, ConsumerError>>,
         shutdown: Arc<Notify>,
     ) -> Result<(), Error> {
-        let leaders = self.fetch_partition_leaders().await?;
+        // let leaders = self.fetch_partition_leaders().await?;
         let coordinator = self.find_coordinator().await?;
 
-        let mut assignment = self.join_group(coordinator, None).await?;
+        let mut assignment_context = self.join_group(coordinator, None).await?;
         loop {
             // Send new message stream for assignment
-            let (msg_sender, msg_receiver) = mpsc::channel(10);
+            let (fetch_sender, fetch_receiver) = mpsc::channel(1);
             let (commit_sender, commit_receiver) = mpsc::channel(10);
-            let message_stream = MessageStream::new(msg_receiver, commit_sender);
+            let assignment = Assignment::new(fetch_receiver, commit_sender);
 
-            if let Err(_) = sender.send(Ok(message_stream)).await {
+            if let Err(_) = sender.send(Ok(assignment)).await {
                 debug!("shutting down - Assignment stream receiver deallocated");
                 return Ok(());
             }
 
-            match self.fetch_loop(&assignment, &shutdown).await? {
+            match self
+                .fetch_loop(&assignment_context, &shutdown, fetch_sender)
+                .await
+                .context("fetch loop failed")?
+            {
                 StopKind::RebalanceInProgress => continue,
                 StopKind::Shutdown => break,
             }
 
-            assignment = self.join_group(coordinator, None).await?;
+            assignment_context = self.join_group(coordinator, None).await?;
         }
 
         //do cleanup stuff
@@ -165,50 +202,99 @@ impl ConsumerInternals {
 
     async fn fetch_loop(
         &self,
-        assignment: &AssignmentData,
+        assignment: &AssignmentContext,
         shutdown: &Notify,
-    ) -> Result<StopKind, Error> {
-        info!("Fetching not implemented yet. I'm doing nothing!");
+        mut fetch_sender: mpsc::Sender<FetchResponse>,
+    ) -> Result<StopKind> {
+        let offsets = self.fetch_offsets(&assignment).await?;
+        let mut fetch_strategy = SimpleFetchStrategy::new(assignment, offsets);
+
+        loop {
+            let (broker, fetch_request) = fetch_strategy.next_fetch();
+            trace!(target: "rskafka::fetch", "REQUEST\n{:#?}", fetch_request);
+            let fetch_response: FetchResponseV4 = self
+                .cluster
+                .make_request(fetch_request, Some(broker))
+                .await?;
+            trace!(target: "rskafka::fetch", "RESPONSE\n{:#?}", fetch_response);
+            let fetch = FetchResponse::from(fetch_response);
+
+            //todo: handle errors
+            fetch_strategy.update_fetched(&fetch);
+            fetch_sender.send(fetch).await.unwrap(); //todo handle error
+        }
         shutdown.notified().await;
         Ok(StopKind::Shutdown)
     }
 
-    async fn fetch_partition_leaders(&self) -> Result<HashMap<KafkaPartition, BrokerId>, Error> {
-        debug!("Fetching metadata for topics: {:?}", self.config.topics);
-
-        // Get topics metadata
-        let request = MetadataRequestV2 {
-            topics: self.config.topics.clone(),
-        };
-        let response: MetadataResponseV2 = self.cluster.make_request(request, None).await?;
-
-        // Build partition -> leader map
-        // partition_leaders: HashMap<KafkaPartition, BrokerId>,
-        let leaders: HashMap<KafkaPartition, BrokerId> = response
-            .topics
-            .iter()
-            .flat_map(|t| {
-                t.partitions.iter().map(move |p| {
-                    let leader = p.leader;
-                    let partition = KafkaPartition {
-                        topic_name: t.name.clone(),
-                        partition_index: p.partition_index,
-                    };
-                    (partition, leader)
+    async fn fetch_offsets(&self, a: &AssignmentContext) -> Result<Offsets, Error> {
+        let request = OffsetFetchRequestV1 {
+            group_id: Cow::Borrowed(&self.config.group_id),
+            topics: a
+                .assigned_partitions
+                .iter()
+                .map(|(t, p)| TopicPartitions {
+                    name: t.into(),
+                    partition_indexes: p.clone(),
                 })
+                .collect(),
+        };
+
+        let response: OffsetFetchResponseV1 = self
+            .cluster
+            .make_request(request, Some(a.coordinator))
+            .await?;
+
+        response.topics.iter().for_each(|t| {
+            t.partitions.iter().for_each(|p| match p.error_code {
+                ErrorCode::None => debug!(
+                    "Fetched offset {}[{}]: {}",
+                    t.name, p.index, p.committed_offset
+                ),
+                error => error!("Offset fetch error: {}", error),
             })
-            .collect();
+        });
 
-        if log_enabled!(log::Level::Trace) {
-            for (p, leader) in leaders.iter() {
-                trace!("Found leader for {}: {}", p, leader);
-            }
-        }
-
-        Ok(leaders)
+        Offsets::from_response(response.topics).map_err(Into::into)
     }
 
-    async fn find_coordinator(&self) -> Result<BrokerId, Error> {
+    // async fn fetch_partition_leaders(&self) -> Result<HashMap<KafkaPartition, BrokerId>, Error> {
+    //     debug!("Fetching metadata for topics: {:?}", self.config.topics);
+
+    //     // Get topics metadata
+    //     let response = self.get_topics_metadata(self.ca)
+    //     let request = MetadataRequestV2 {
+    //         topics: self.config.topics.clone(),
+    //     };
+    //     let response: MetadataResponseV2 = self.cluster.make_request(request, None).await?;
+
+    //     // Build partition -> leader map
+    //     // partition_leaders: HashMap<KafkaPartition, BrokerId>,
+    //     let leaders: HashMap<KafkaPartition, BrokerId> = response
+    //         .topics
+    //         .iter()
+    //         .flat_map(|t| {
+    //             t.partitions.iter().map(move |p| {
+    //                 let leader = p.leader;
+    //                 let partition = KafkaPartition {
+    //                     topic_name: t.name.clone(),
+    //                     partition_index: p.partition_index,
+    //                 };
+    //                 (partition, leader)
+    //             })
+    //         })
+    //         .collect();
+
+    //     if log_enabled!(log::Level::Trace) {
+    //         for (p, leader) in leaders.iter() {
+    //             trace!("Found leader for {}: {}", p, leader);
+    //         }
+    //     }
+
+    //     Ok(leaders)
+    // }
+
+    async fn find_coordinator(&self) -> Result<BrokerId> {
         let request = FindCoordinatorRequestV2 {
             key: self.config.group_id.clone(),
             key_type: find_coordinator::KeyType::Group,
@@ -224,7 +310,7 @@ impl ConsumerInternals {
                 );
                 Ok(response.node_id)
             }
-            error => Err(error.into()),
+            error => Err(RsKafkaError::from(error).into()),
         }
     }
 
@@ -232,7 +318,7 @@ impl ConsumerInternals {
         &self,
         coordinator: BrokerId,
         member_id: Option<&str>,
-    ) -> Result<AssignmentData, Error> {
+    ) -> Result<AssignmentContext> {
         let mut member_id = member_id.map(Cow::Borrowed);
         let metadata = self.build_group_protocol_metadata();
 
@@ -250,20 +336,18 @@ impl ConsumerInternals {
                     member_id = Some(Cow::Owned(response.member_id));
                     continue;
                 }
-                error => return Err(error.into()),
+                error => return Err(RsKafkaError::from(error).into()),
             }
         };
+
+        let members_per_topic = Self::extract_members_for_topics(&join_group_response.members);
+        let topics_metadata = self
+            .get_topics_metadata(members_per_topic.keys().map(String::as_str))
+            .await?;
 
         let sync_group_request = if !join_group_response.members.is_empty() {
             debug!("Performing partition assignment");
             // Assign partitions
-            let members_per_topic = Self::extract_members_for_topics(&join_group_response.members);
-
-            // request topic metadata again (we may not have complete topic set for group)
-            let topics_metadata = self
-                .get_topics_metadata(members_per_topic.keys().map(String::as_str))
-                .await?;
-
             let assignments =
                 self.assign_partitions_roundrobin(&members_per_topic, &topics_metadata)?;
 
@@ -302,13 +386,18 @@ impl ConsumerInternals {
                     }
                 }
 
-                Ok(AssignmentData {
+                Ok(AssignmentContext {
                     generation_id: join_group_response.generation_id,
                     member_id: join_group_response.member_id,
-                    assigned_partitions: assigned,
+                    assigned_partitions: assigned.into_iter().collect(),
+                    topic_metadata: topics_metadata
+                        .into_iter()
+                        .map(|t| (t.name.clone(), t))
+                        .collect(),
+                    coordinator,
                 })
             }
-            error => Err(error.into()),
+            error => Err(RsKafkaError::from(error).into()),
         }
     }
 
@@ -380,7 +469,7 @@ impl ConsumerInternals {
         &self,
         members_per_topic: &HashMap<String, Vec<&str>>,
         topics_metadata: &[TopicMetadata],
-    ) -> Result<Vec<Assignment<'static>>, Error> {
+    ) -> Result<Vec<MemberAssignmentData<'static>>, Error> {
         let topics_metadata: HashMap<_, _> =
             topics_metadata.into_iter().map(|m| (&m.name, m)).collect();
         // Only roundrobin supported as for now
@@ -417,18 +506,12 @@ impl ConsumerInternals {
             .collect();
 
         if log_enabled!(log::Level::Debug) {
-            for (member, topics) in assignments.iter() {
-                for (topic, partitions) in topics {
-                    for partition in partitions {
-                        debug!("Assigning {}[{}] to {}", topic, partition, member)
-                    }
-                }
-            }
+            Self::log_assingment(&assignments);
         }
 
         let assignments = assignments
             .into_iter()
-            .map(|(member_id, topics)| Assignment {
+            .map(|(member_id, topics)| MemberAssignmentData {
                 member_id: Cow::Owned(member_id),
                 assignment: AssignmentMetadata::new(topics).to_wire_bytes(),
             })
@@ -436,17 +519,21 @@ impl ConsumerInternals {
 
         Ok(assignments)
     }
+
+    fn log_assingment(assignments: &[(String, Vec<(String, Vec<i32>)>)]) {
+        for (member, topics) in assignments.iter() {
+            for (topic, partitions) in topics {
+                for partition in partitions {
+                    debug!("Assigning {}[{}] to {}", topic, partition, member)
+                }
+            }
+        }
+    }
 }
 
 enum StopKind {
     Shutdown,
     RebalanceInProgress,
-}
-
-struct AssignmentData {
-    pub generation_id: i32,
-    pub member_id: String,
-    pub assigned_partitions: Vec<(String, Vec<i32>)>,
 }
 
 //todo: rename to sth like: Private/Custom
@@ -498,69 +585,5 @@ impl ConsumerKillswitch {
         info!("Shutting down consumer");
         self.shutdown.notify();
         let _ = self.join_handle.await;
-    }
-}
-
-// impl Stream for Consumer {
-//     type Item = Result<MessageStream, Error>;
-
-//     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-//         self.receiver.poll_next_unpin(cx)
-//     }
-// }
-
-pub struct MessageStream {
-    msg_receiver: mpsc::Receiver<()>,
-    commit_sender: mpsc::Sender<()>,
-}
-
-impl MessageStream {
-    fn new(msg_receiver: mpsc::Receiver<()>, commit_sender: mpsc::Sender<()>) -> Self {
-        MessageStream {
-            msg_receiver,
-            commit_sender,
-        }
-    }
-
-    pub fn commit_sink(&self) -> CommitSink {
-        CommitSink
-    }
-}
-
-impl Stream for MessageStream {
-    type Item = KafkaMessage;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-        warn!("MessageStream::poll_next not implemented");
-
-        let item = ready!(self.msg_receiver.poll_next_unpin(cx));
-
-        Poll::Ready(item.map(|_| todo!()))
-    }
-}
-
-pub struct CommitSink;
-
-impl Sink<KafkaOffset> for CommitSink {
-    type Error = Error;
-
-    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
-        warn!("CommitSink::poll_ready not implemented");
-        Poll::Ready(Ok(()))
-    }
-
-    fn start_send(self: Pin<&mut Self>, item: KafkaOffset) -> Result<(), Self::Error> {
-        warn!("CommitSink::start_send not implemented");
-        Ok(())
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
-        warn!("MessageStream::poll_flush not implemented");
-        Poll::Ready(Ok(()))
-    }
-
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
-        warn!("MessageStream::poll_close not implemented");
-        Poll::Ready(Ok(()))
     }
 }

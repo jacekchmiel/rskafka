@@ -7,8 +7,8 @@ where
     T1: WireFormatParse,
     T2: WireFormatParse,
 {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        tuple((T1::parse_bytes, T2::parse_bytes))(input)
+    fn parse(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
+        tuple((T1::parse, T2::parse))(input)
     }
 }
 impl<T1, T2> WireFormatWrite for (T1, T2)

@@ -3,11 +3,11 @@ use crate::error::{custom_error, custom_io_error, ParseError};
 use crate::prelude::*;
 use nom::bytes::complete::take;
 use nom::combinator::map;
-use std::convert::TryFrom;
+use std::{borrow::Cow, convert::TryFrom};
 
 impl WireFormatParse for Vec<u8> {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        let (input, ssize) = i32::parse_bytes(input)?;
+    fn parse(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
+        let (input, ssize) = i32::parse(input)?;
         let size = usize::try_from(ssize).map_err(|_| custom_error("negative size"))?;
         map(take(size), |bytes: &[u8]| Vec::from(bytes))(input)
     }
@@ -24,15 +24,50 @@ impl WireFormatWrite for [u8] {
         writer.write_all(self)
     }
 }
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CompactBytes<'a>(Cow<'a, [u8]>);
 
-pub struct CompactBytes(pub Vec<u8>);
+impl<'a> AsRef<[u8]> for CompactBytes<'a> {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
 
-impl<'a> WireFormatParse for CompactBytes {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        let (input, VarInt(size_encoded)) = VarInt::parse_bytes(input)?;
+impl<'a> From<&'a [u8]> for CompactBytes<'a> {
+    fn from(v: &'a [u8]) -> Self {
+        CompactBytes(v.into())
+    }
+}
+
+impl From<Vec<u8>> for CompactBytes<'static> {
+    fn from(v: Vec<u8>) -> Self {
+        CompactBytes(v.into())
+    }
+}
+// impl WireFormatParse for CompactBytes<'static> {
+//     fn parse(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
+//         let (input, VarInt(size_encoded)) = VarInt::parse(input)?;
+//         let size = usize::try_from(size_encoded - 1).map_err(|_| custom_error("negative size"))?;
+//         let (input, bytes) = take(size)(input)?;
+//         Ok((input, CompactBytes(Vec::from(bytes).into())))
+//     }
+// }
+
+impl WireFormatParse for CompactBytes<'static> {
+    fn parse(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
+        let (input, VarInt(size_encoded)) = VarInt::parse(input)?;
         let size = usize::try_from(size_encoded - 1).map_err(|_| custom_error("negative size"))?;
         let (input, bytes) = take(size)(input)?;
-        Ok((input, CompactBytes(Vec::from(bytes))))
+        Ok((input, CompactBytes(bytes.to_vec().into())))
+    }
+}
+
+impl<'a> WireFormatBorrowParse<'a> for CompactBytes<'a> {
+    fn borrow_parse(input: &'a [u8]) -> IResult<&'a [u8], Self, ParseError> {
+        let (input, VarInt(size_encoded)) = VarInt::parse(input)?;
+        let size = usize::try_from(size_encoded - 1).map_err(|_| custom_error("negative size"))?;
+        let (input, bytes) = take(size)(input)?;
+        Ok((input, CompactBytes(bytes.into())))
     }
 }
 
@@ -50,8 +85,8 @@ impl NullableBytes {
 }
 
 impl WireFormatParse for NullableBytes {
-    fn parse_bytes(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
-        let (input, ssize) = i32::parse_bytes(input)?;
+    fn parse(input: &[u8]) -> nom::IResult<&[u8], Self, ParseError> {
+        let (input, ssize) = i32::parse(input)?;
         match ssize {
             -1i32 => Ok((input, NullableBytes::with_null())),
             other if other < 0 => panic!(), //FIXME: error
@@ -69,11 +104,11 @@ mod test {
     use super::*;
 
     #[test]
-    fn parse_bytes() {
+    fn parse() {
         let expected: Vec<u8> = vec![1, 2, 3];
         let remaining: &[u8] = &[4, 5, 6];
         assert_eq!(
-            Vec::<u8>::parse_bytes(&[0, 0, 0, 3, 1, 2, 3, 4, 5, 6]),
+            Vec::<u8>::parse(&[0, 0, 0, 3, 1, 2, 3, 4, 5, 6]),
             Ok((remaining, (expected)))
         );
     }
@@ -82,7 +117,7 @@ mod test {
     fn parse_nullable_bytes_null() {
         let remaining: &[u8] = &[1, 2, 3, 4, 5, 6];
         assert_eq!(
-            NullableBytes::parse_bytes(&[255, 255, 255, 255, 1, 2, 3, 4, 5, 6]),
+            NullableBytes::parse(&[255, 255, 255, 255, 1, 2, 3, 4, 5, 6]),
             Ok((remaining, NullableBytes::with_null()))
         );
     }
@@ -91,7 +126,7 @@ mod test {
     fn parse_nullable_bytes_empty() {
         let remaining: &[u8] = &[1, 2, 3, 4, 5, 6];
         assert_eq!(
-            NullableBytes::parse_bytes(&[0, 0, 0, 0, 1, 2, 3, 4, 5, 6]),
+            NullableBytes::parse(&[0, 0, 0, 0, 1, 2, 3, 4, 5, 6]),
             Ok((remaining, NullableBytes::with_data(&[])))
         );
     }
@@ -100,7 +135,7 @@ mod test {
     fn parse_nullable_bytes() {
         let remaining: &[u8] = &[4, 5, 6];
         assert_eq!(
-            NullableBytes::parse_bytes(&[0, 0, 0, 3, 1, 2, 3, 4, 5, 6]),
+            NullableBytes::parse(&[0, 0, 0, 3, 1, 2, 3, 4, 5, 6]),
             Ok((remaining, NullableBytes::with_data(&[1, 2, 3])))
         );
     }
@@ -110,5 +145,23 @@ mod test {
         let expected = vec![0, 0, 0, 3, 1, 2, 3];
         assert_eq!(bytes.wire_size(), expected.len());
         assert_eq!(bytes.to_wire_bytes(), expected);
+    }
+
+    #[test]
+    fn compact_bytes_parse() {
+        let bytes: Vec<u8> = vec![0, 0, 0, 2, 2];
+        let parsed = CompactBytes::over_wire_bytes(&bytes).unwrap();
+
+        assert_eq!(parsed.0.as_ref(), &[2]);
+    }
+
+    #[test]
+    fn compact_bytes_parse_owned() {
+        let parsed = {
+            let bytes: Vec<u8> = vec![0, 0, 0, 2, 2];
+            CompactBytes::from_wire_bytes(&bytes).unwrap()
+        };
+
+        assert_eq!(parsed.0.as_ref(), &[2]);
     }
 }

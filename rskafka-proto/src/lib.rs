@@ -7,7 +7,12 @@ mod error;
 mod request;
 mod response;
 
-pub use data::{api_key::ApiKey, error::ErrorCode, BrokerId};
+pub use data::{
+    api_key::ApiKey,
+    error::ErrorCode,
+    record::{Record, RecordBatch},
+    BrokerId,
+};
 pub use request::KafkaRequest;
 pub use response::KafkaResponse;
 
@@ -22,5 +27,18 @@ mod test_utils {
         }
 
         buf
+    }
+
+    pub fn hex_dump(data: &[u8]) -> &[u8] {
+        for bytes in data.chunks(16) {
+            for bytes in bytes.chunks(8) {
+                for byte in bytes {
+                    eprint!("{:02x} ", byte);
+                }
+                eprint!(" ")
+            }
+            eprint!("\n")
+        }
+        data
     }
 }

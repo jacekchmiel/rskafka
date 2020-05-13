@@ -2,7 +2,6 @@ use crate::{
     data::{api_key::ApiKey, error::ErrorCode},
     KafkaRequest, KafkaResponse,
 };
-use rskafka_wire_format::{error::ParseError, prelude::*};
 use std::borrow::Cow;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, WireFormatWrite)]
@@ -38,11 +37,7 @@ pub struct JoinGroupResponseV4 {
     pub members: Vec<GroupMember>,
 }
 
-impl KafkaResponse for JoinGroupResponseV4 {
-    fn from_bytes(input: &[u8]) -> Result<Self, ParseError> {
-        Self::from_wire_bytes(input)
-    }
-}
+impl KafkaResponse for JoinGroupResponseV4 {}
 
 #[derive(Debug, Clone, PartialEq, WireFormatParse)]
 pub struct GroupMember {

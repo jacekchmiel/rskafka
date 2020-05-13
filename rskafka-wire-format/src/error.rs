@@ -1,42 +1,54 @@
-use nom::error::ParseError as ParseErrorTrait;
 use std::borrow::Cow;
 use thiserror::Error;
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
 #[error("parse error")]
 pub enum ParseError {
     #[error("too many bytes")]
     TooMuchData(usize),
     #[error("not enough bytes")]
     Incomplete(nom::Needed),
-    #[error("{0:?}")]
-    Parse(Vec<nom::error::ErrorKind>),
-    #[error("{0:?}")]
+    #[error("cannot interpret protocol bytes in: {0:?}")]
+    Parse(nom::error::ErrorKind),
+    #[error("{0}")]
     Custom(Cow<'static, str>),
+    #[error("while parsing {0}: {1}")]
+    Context(Cow<'static, str>, Box<ParseError>),
+}
+
+impl ParseError {
+    pub fn context(self, ctx: Cow<'static, str>) -> Self {
+        ParseError::Context(ctx, Box::new(self))
+    }
 }
 
 impl<I> nom::error::ParseError<I> for ParseError {
     fn from_error_kind(_input: I, kind: nom::error::ErrorKind) -> Self {
-        ParseError::Parse(vec![kind])
+        ParseError::Parse(kind)
     }
 
     fn append(_input: I, kind: nom::error::ErrorKind, other: Self) -> Self {
-        match other {
-            ParseError::Parse(trace) => {
-                ParseError::Parse(trace.into_iter().chain(std::iter::once(kind)).collect())
-            }
-            other => other,
-        }
+        // other
+        ParseError::Context(kind.description().to_string().into(), Box::new(other))
     }
 }
 
-impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for ParseError {
-    fn from(v: nom::Err<(&[u8], nom::error::ErrorKind)>) -> Self {
+// impl From<nom::Err<(&[u8], nom::error::ErrorKind)>> for ParseError {
+//     fn from(v: nom::Err<(&[u8], nom::error::ErrorKind)>) -> Self {
+//         match v {
+//             nom::Err::Incomplete(needed) => ParseError::Incomplete(needed),
+//             nom::Err::Error((i, e)) | nom::Err::Failure((i, e)) => {
+//                 ParseError::from_error_kind(i, e)
+//             }
+//         }
+//     }
+// }
+
+impl From<nom::Err<ParseError>> for ParseError {
+    fn from(v: nom::Err<ParseError>) -> Self {
         match v {
             nom::Err::Incomplete(needed) => ParseError::Incomplete(needed),
-            nom::Err::Error((i, e)) | nom::Err::Failure((i, e)) => {
-                ParseError::from_error_kind(i, e)
-            }
+            nom::Err::Error(e) | nom::Err::Failure(e) => e,
         }
     }
 }

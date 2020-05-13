@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate rskafka_wire_format_derive;
 
+pub mod batch;
 pub mod client;
 pub mod consumer;
 mod error;

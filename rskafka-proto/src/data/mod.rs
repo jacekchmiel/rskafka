@@ -1,6 +1,7 @@
 pub mod api_key;
 pub mod error;
 pub mod header;
+pub mod record;
 
 use rskafka_wire_format::error::ParseError;
 use rskafka_wire_format::prelude::*;
@@ -9,8 +10,8 @@ use rskafka_wire_format::prelude::*;
 pub struct BrokerId(pub(crate) i32);
 
 impl WireFormatParse for BrokerId {
-    fn parse_bytes(input: &[u8]) -> IResult<&[u8], Self, ParseError> {
-        let (input, v) = i32::parse_bytes(input)?;
+    fn parse(input: &[u8]) -> IResult<&[u8], Self, ParseError> {
+        let (input, v) = i32::parse(input)?;
         Ok((input, BrokerId(v)))
     }
 }

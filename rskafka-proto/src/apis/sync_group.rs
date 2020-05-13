@@ -6,7 +6,7 @@ pub struct SyncGroupRequestV2<'a> {
     pub group_id: Cow<'a, str>,
     pub generation_id: i32,
     pub member_id: Cow<'a, str>,
-    pub assignments: Vec<Assignment<'a>>,
+    pub assignments: Vec<MemberAssignmentData<'a>>,
 }
 
 impl<'a> KafkaRequest for SyncGroupRequestV2<'a> {
@@ -25,7 +25,7 @@ pub struct SyncGroupResponseV2 {
 impl KafkaResponse for SyncGroupResponseV2 {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, WireFormatWrite)]
-pub struct Assignment<'a> {
+pub struct MemberAssignmentData<'a> {
     pub member_id: Cow<'a, str>,
     pub assignment: Vec<u8>,
 }

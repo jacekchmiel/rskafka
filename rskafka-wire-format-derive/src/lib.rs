@@ -40,12 +40,13 @@ fn wire_format_parse_derive(s: synstructure::Structure) -> TokenStream {
         let field = bi.ast();
         let name = field.ident.as_ref().unwrap();
         let custom_wire_type = find_wire_type_attr(&field.attrs);
+        let err_context = LitStr::new(&format!("{}", name), Span::call_site());
         match custom_wire_type {
-            None => quote!(let (input, #name) = ::rskafka_wire_format::WireFormatParse::parse_bytes(input)?;),
+            None => quote!(let (input, #name) = ::rskafka_wire_format::WireFormatParse::parse(input).map_err(|e| e.map(|e| e.context(#err_context.into())))?;),
             Some(wire_type) => {
                 let err_message = LitStr::new(&format!("invalid {} value", name), Span::call_site());
                 quote! {
-                    let (input, #name) = #wire_type::parse_bytes(input)?;
+                    let (input, #name) = #wire_type::parse(input).map_err(|e| e.map(|e| e.context(#err_context.into())))?;
                     let #name = #name.try_into().map_err(|_| ::rskafka_wire_format::error::custom_error(#err_message))?;
                 }
             },
@@ -62,7 +63,7 @@ fn wire_format_parse_derive(s: synstructure::Structure) -> TokenStream {
         use std::convert::TryInto as TryInto__RskafkaProtoDerive;
 
         gen impl rskafka_wire_format::prelude::WireFormatParse for @Self {
-            fn parse_bytes(input: &[u8]) -> ::rskafka_wire_format::IResult<&[u8], Self, ::rskafka_wire_format::error::ParseError> {
+            fn parse(input: &[u8]) -> ::rskafka_wire_format::IResult<&[u8], Self, ::rskafka_wire_format::error::ParseError> {
                 #(#parse)*
                 Ok((input, #construct))
             }

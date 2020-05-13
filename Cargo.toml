@@ -16,10 +16,10 @@ rskafka-proto = { path = "rskafka-proto" }
 rskafka-wire-format = { path = "rskafka-wire-format" }
 rskafka-wire-format-derive = { path = "rskafka-wire-format-derive" }
 thiserror = "1.0.16"
+anyhow = "1.0.28"
 log = "0.4.8"
 tokio = { version = "0.2.20", features = ["full"] }
 futures = "0.3.4"
 
 [dev-dependencies]
 env_logger = "0.7.1"
-anyhow = "1.0.28"

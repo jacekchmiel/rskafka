@@ -47,19 +47,10 @@ struct ApiVersionsRangeRaw {
     pub max_version: i16,
 }
 
-// fn api_versions_filtered(input: &[u8]) -> nom::IResult<&[u8], Vec<ApiVersionsRange>, ParseError> {
-//     let (input, versions) = Vec::<ApiVersionsRangeRaw>::parse_bytes(input)?;
-//     let versions = versions
-//         .into_iter()
-//         .filter_map(ApiVersionsRange::try_from_raw)
-//         .collect();
-//     Ok((input, versions))
-// }
-
 impl WireFormatParse for ApiVersionsResponseV0 {
-    fn parse_bytes(input: &[u8]) -> IResult<&[u8], Self, ParseError> {
-        let (input, error_code) = ErrorCode::parse_bytes(input)?;
-        let (input, raw) = Vec::<ApiVersionsRangeRaw>::parse_bytes(input)?;
+    fn parse(input: &[u8]) -> IResult<&[u8], Self, ParseError> {
+        let (input, error_code) = ErrorCode::parse(input)?;
+        let (input, raw) = Vec::<ApiVersionsRangeRaw>::parse(input)?;
         let api_keys = raw
             .into_iter()
             .filter_map(ApiVersionsRange::try_from_raw)
